@@ -18,8 +18,19 @@ window.RK = window.RK || {};
     selected: new Set(),  // marked tile ids (Task 6)
     hint: { active: false, plan: [], step: -1 }, // guided hint (Task 5)
     review: { active: false, index: 0 }, // move-history replay (Task 8)
+    pending: [], _nextGid: 1,            // pre-placements staged out of turn (Task 7)
     caret: null, _flyTimers: [], _pendingAnim: null,
   };
+
+  const meldKeyUI = (m) => m.map(t => t.id).sort().join(',');
+  UI.humanPlayer = () => UI.game.players.find(p => !p.isAI);
+  // Pre-placing is a single-player convenience (a hotseat opponent is a person at
+  // the same screen). Active only while it's an opponent's turn.
+  UI.isStaging = () => UI.game && UI.game.mode === 'single' && UI.game.phase === 'playing' &&
+    !UI.game.isHumanTurn() && !UI.review.active;
+  // The player currently acting through the rack (the human, whether it's their
+  // turn or they're pre-placing during an opponent's turn).
+  UI.actor = () => (UI.isStaging() ? UI.humanPlayer() : UI.game.currentPlayer());
 
   // ---- Tile & meld DOM ------------------------------------------------------
   function jokerSVG(color) {
@@ -55,6 +66,7 @@ window.RK = window.RK || {};
     $('review-bar').classList.add('hidden');
     layoutBoard(UI.game.board);
     renderBoard(UI.game.board);
+    renderPending();
     renderRack();
     applyTransform();
     updateControls();
@@ -154,21 +166,136 @@ window.RK = window.RK || {};
 
   function renderRack() {
     const g = UI.game;
-    const p = g.currentPlayer();
     const rack = $('rack');
     rack.innerHTML = '';
-    $('rack-owner').textContent = g.isHumanTurn() ? p.name + "'s rack" :
-      (g.phase === 'over' ? 'Game over' : p.name + ' is playing…');
-    // Only show the rack of the human whose turn it is (hotseat privacy + clarity).
-    const showTiles = g.isHumanTurn() ? p.rack : (g.phase === 'over' ? [] : []);
-    showTiles.forEach(t => rack.appendChild(tileEl(t)));
-    if (!g.isHumanTurn() && g.phase !== 'over') {
+    const staging = UI.isStaging();
+
+    if (g.isHumanTurn() || staging) {
+      const p = UI.actor();
+      $('rack-owner').textContent = staging
+        ? p.name + ' — pre-placing (auto-plays on your turn)'
+        : p.name + "'s rack";
+      const pend = new Set(UI.pending.map(x => x.id));   // pending tiles show as ghosts on the board
+      p.rack.forEach(t => { if (!pend.has(t.id)) rack.appendChild(tileEl(t)); });
+      return;
+    }
+
+    // Local hotseat during someone else's turn, or game over.
+    $('rack-owner').textContent = g.phase === 'over' ? 'Game over' : g.currentPlayer().name + ' is playing…';
+    if (g.phase !== 'over') {
       const hint = document.createElement('div');
       hint.className = 'text-white/40 text-sm px-3 py-4';
-      hint.textContent = g.mode === 'local' ? 'Pass the device when it’s your turn.' : 'Thinking…';
+      hint.textContent = 'Pass the device when it’s your turn.';
       rack.appendChild(hint);
     }
   }
+
+  // ---- Pre-placement overlays (Task 7) -------------------------------------
+  function renderPending() {
+    if (!UI.pending.length) return;
+    const g = UI.game, human = UI.humanPlayer();
+    const find = (id) => human.rack.find(t => t.id === id);
+    const byGid = {}, bySig = {};
+    UI.pending.forEach(p => {
+      const tile = find(p.id); if (!tile) return;
+      if (p.kind === 'new') (byGid[p.gid] = byGid[p.gid] || []).push(tile);
+      else (bySig[p.sig] = bySig[p.sig] || []).push(tile);
+    });
+    // Appends: ghost tiles attached to their target committed meld.
+    Object.keys(bySig).forEach(sig => {
+      const idx = g.board.findIndex(m => meldKeyUI(m) === sig);
+      const meldEl = idx >= 0 && boardMeldElByIndex(idx);
+      if (!meldEl) return;
+      bySig[sig].forEach(t => { const gt = tileEl(t); gt.classList.add('tile-pending'); meldEl.appendChild(gt); });
+    });
+    // New pending melds: amber ghost pills stacked in a staging zone.
+    let spot = freeBoardSpot();
+    Object.keys(byGid).forEach(gid => {
+      const pill = document.createElement('div');
+      pill.className = 'meld absolute flex items-center gap-[3px] rounded-xl px-2.5 py-2 pending-pill';
+      pill.dataset.pendingGid = gid;
+      pill.style.left = spot.x + 'px'; pill.style.top = spot.y + 'px';
+      const badge = document.createElement('div'); badge.className = 'meld-badge'; badge.textContent = 'STAGED';
+      pill.appendChild(badge);
+      byGid[gid].forEach(t => { const gt = tileEl(t); gt.classList.add('tile-pending'); pill.appendChild(gt); });
+      $('board-world').appendChild(pill);
+      spot = { x: spot.x, y: spot.y + cssVar('--tile-h') + 30 };
+    });
+  }
+  function removePending(id) { UI.pending = UI.pending.filter(p => p.id !== id); }
+
+  function stageDrop(id, tile, meldEl, inRack, inBoard) {
+    removePending(id);
+    if (meldEl && meldEl.dataset.meldIndex !== undefined) {
+      UI.pending.push({ id, kind: 'meld', sig: meldKeyUI(UI.game.board[+meldEl.dataset.meldIndex]) });
+    } else if (meldEl && meldEl.dataset.pendingGid !== undefined) {
+      UI.pending.push({ id, kind: 'new', gid: +meldEl.dataset.pendingGid });
+    } else if (inBoard && !inRack) {
+      UI.pending.push({ id, kind: 'new', gid: UI._nextGid++ });
+    }   // dropped back on the rack -> simply unstaged
+    RK.audio.play('place');
+    render();
+  }
+
+  // After an opponent move, revert ONLY the pending appends that no longer form a
+  // legal set (their target meld changed/vanished). Self-contained pending sets
+  // built from your own tiles are never affected.
+  function reconcilePending() {
+    if (!UI.pending.length) return;
+    const g = UI.game, human = UI.humanPlayer();
+    const bySig = {}, keep = [];
+    let reverted = 0;
+    UI.pending.forEach(p => { if (p.kind !== 'meld') keep.push(p); else (bySig[p.sig] = bySig[p.sig] || []).push(p); });
+    Object.keys(bySig).forEach(sig => {
+      const items = bySig[sig];
+      const idx = g.board.findIndex(m => meldKeyUI(m) === sig);
+      const tiles = items.map(it => human.rack.find(t => t.id === it.id)).filter(Boolean);
+      if (idx >= 0 && RK.validateSet(g.board[idx].concat(tiles)).valid) items.forEach(it => keep.push(it));
+      else reverted += items.length;
+    });
+    if (reverted) {
+      UI.pending = keep;
+      g.status = '⚠ ' + reverted + ' pre-placed tile' + (reverted === 1 ? '' : 's') +
+        ' no longer fit and returned to your rack.';
+      RK.audio.play('invalid');
+    }
+  }
+
+  // On the human's turn: commit every still-valid pending placement, then let them
+  // keep playing. (Runs after beginTurn's snapshot, so these count as normal plays.)
+  UI.commitPending = function () {
+    const g = UI.game;
+    if (!UI.pending.length) return;
+    const p = g.currentPlayer();
+    if (p.isAI) return;
+    const byGid = {}, bySig = {};
+    UI.pending.forEach(pp => {
+      const tile = p.rack.find(t => t.id === pp.id); if (!tile) return;
+      if (pp.kind === 'new') (byGid[pp.gid] = byGid[pp.gid] || []).push(tile);
+      else (bySig[pp.sig] = bySig[pp.sig] || []).push(tile);
+    });
+    let placed = 0, reverted = 0;
+    Object.keys(bySig).forEach(sig => {
+      const idx = g.board.findIndex(m => meldKeyUI(m) === sig);
+      const tiles = bySig[sig];
+      if (idx < 0 || !p.melded || !RK.validateSet(g.board[idx].concat(tiles)).valid) { reverted += tiles.length; return; }
+      g.board[idx].push.apply(g.board[idx], tiles);
+      const ids = new Set(tiles.map(t => t.id)); p.rack = p.rack.filter(t => !ids.has(t.id));
+      placed += tiles.length;
+    });
+    Object.keys(byGid).forEach(gid => {
+      const tiles = byGid[gid];
+      g.board.push(tiles.slice());
+      const ids = new Set(tiles.map(t => t.id)); p.rack = p.rack.filter(t => !ids.has(t.id));
+      placed += tiles.length;
+    });
+    UI.pending = [];
+    let msg = '';
+    if (placed) msg = 'Placed ' + placed + ' pre-staged tile' + (placed === 1 ? '' : 's') + ' — keep playing or End turn.';
+    if (reverted) msg += (msg ? ' ' : '') + reverted + ' didn’t fit and stayed in your rack.';
+    if (msg) g.status = msg;
+    render();
+  };
 
   function updateControls() {
     const g = UI.game;
@@ -273,7 +400,7 @@ window.RK = window.RK || {};
 
   // ---- Model helpers --------------------------------------------------------
   function locate(id) {
-    const g = UI.game, p = g.currentPlayer();
+    const g = UI.game, p = UI.actor();
     let idx = p.rack.findIndex(t => t.id === id);
     if (idx >= 0) return { arr: p.rack, index: idx, isRack: true };
     for (const meld of g.board) {
@@ -368,12 +495,15 @@ window.RK = window.RK || {};
     const inRack = under && under.closest('#rack');
     const inBoard = under && under.closest('#board-viewport');
 
+    // Pre-placement mode (opponent's turn): update the pending list, not the board.
+    if (UI.isStaging()) { stageDrop(g.id, tile, meldEl, inRack, inBoard); UI.gesture = null; return; }
+
     let dest = null, insertIdx = 0, newMeldPos = null;
     if (meldEl) {
       dest = UI.game.board[+meldEl.dataset.meldIndex];
       insertIdx = computeIndex(meldEl, e.clientX, g.el);
     } else if (inRack) {
-      dest = UI.game.currentPlayer().rack;
+      dest = UI.actor().rack;
       insertIdx = computeIndex($('rack'), e.clientX, g.el);
     } else if (inBoard) {
       newMeldPos = screenToWorld(e.clientX, e.clientY);
@@ -421,12 +551,15 @@ window.RK = window.RK || {};
     if (UI.review.active) return;           // board is read-only while reviewing history
     UI.pointers.set(e.pointerId, e);
     if (UI.pointers.size === 2) { beginPinch(); return; }
-    if (!UI.game.isHumanTurn()) return;
+    const human = UI.game.isHumanTurn(), staging = UI.isStaging();
+    if (!human && !staging) return;
     const t = e.target;
     const tile = t.closest && t.closest('.tile');
+    // Tiles can be dragged on your turn OR while pre-placing during an opponent's turn.
     if (tile && (t.closest('#rack') || t.closest('#board-world'))) { startTileDrag(tile, e); return; }
+    // Only rearrange committed melds on your own turn.
     const meld = t.closest && t.closest('.meld');
-    if (meld && t.closest('#board-viewport')) { startMeldDrag(meld, e); return; }
+    if (human && meld && meld.dataset.meldIndex !== undefined && t.closest('#board-viewport')) { startMeldDrag(meld, e); return; }
     if (t.closest && t.closest('#board-viewport')) startPan(e);
   }
   function onPointerMove(e) {
@@ -676,7 +809,8 @@ window.RK = window.RK || {};
     vp.addEventListener('wheel', (e) => { e.preventDefault(); zoomAround(e.clientX, e.clientY, e.deltaY < 0 ? 1.1 : 0.9); }, { passive: false });
 
     game.on('change', render);
-    game.on('move', UI.notifyMove);
+    game.on('move', (entry) => { UI.notifyMove(entry); reconcilePending(); });
+    game.on('turnstart', (p) => { if (!p.isAI) UI.commitPending(); });
     resetView();
     render();
   };
