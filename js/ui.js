@@ -183,10 +183,17 @@ window.RK = window.RK || {};
       el.style.left = meld._x + 'px';
       el.style.top = meld._y + 'px';
       el.dataset.meldIndex = i;
-      // Scannable badge: type + points, or a warning when the set isn't legal.
+      // Scannable badge: type + points, or — in easy mode — the exact reason a
+      // set isn't legal yet, so a mistake becomes a lesson.
+      const easy = UI.game.difficulty === 'easy';
       const badge = document.createElement('div');
       badge.className = 'meld-badge ' + (ok ? 'ok' : 'bad');
-      badge.textContent = ok ? (r.type === 'run' ? 'RUN' : 'GROUP') + ' · ' + r.points : '✗ invalid';
+      if (ok) {
+        badge.textContent = (r.type === 'run' ? 'RUN' : 'GROUP') + ' · ' + r.points;
+      } else {
+        badge.textContent = easy && r.reason ? '✗ ' + r.reason : '✗ invalid';
+        badge.title = r.reason || 'Not a valid run or group';
+      }
       el.appendChild(badge);
       meld.forEach(t => el.appendChild(tileEl(t)));
       world.appendChild(el);
@@ -360,6 +367,9 @@ window.RK = window.RK || {};
       const b = $(id); if (b) b.disabled = !human;
       if (b) b.classList.toggle('opacity-40', !human);
     });
+    // In easy mode, keep the step-by-step guide one obvious tap away.
+    const best = $('btn-best');
+    if (best) best.classList.toggle('coach-pulse', g.difficulty === 'easy' && human && !UI.hint.active);
   }
 
   function escapeHtml(s) { return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
@@ -976,6 +986,24 @@ window.RK = window.RK || {};
     $('hint-accept').disabled = h.step < 0;
   }
 
+  // Easy mode holds the learner's hand: at the start of their turn, open the
+  // step-by-step guide automatically so they always see what to do next. It's
+  // still fully closable, and re-opens next turn.
+  UI.easyCoach = function () {
+    const g = UI.game;
+    if (!g || g.difficulty !== 'easy') return;
+    if (!g.isHumanTurn() || g.phase !== 'playing' || UI.review.active || UI.hint.active) return;
+    UI.startGuidedHint();
+  };
+
+  // Briefly flash board tiles green so a placement's effect is obvious.
+  function flashBoardTiles(ids) {
+    ids.forEach(id => {
+      const el = $('board-world').querySelector('.tile[data-tile-id="' + id + '"]');
+      if (el) { el.classList.add('just-placed'); const tm = setTimeout(() => el.classList.remove('just-placed'), 700); UI._flyTimers.push(tm); }
+    });
+  }
+
   UI.startGuidedHint = function () {
     if (!UI.game.isHumanTurn()) return;
     const res = computeHintPlan();
@@ -1007,13 +1035,21 @@ window.RK = window.RK || {};
     if (!UI.hint.active || UI.hint.step < 0) return;
     const pl = UI.hint.plan[UI.hint.step];
     if (!pl) return;
+    const placedIds = (pl.type === 'new' ? pl.tiles : [pl.tile]).map(t => t.id);
+    const what = pl.type === 'new'
+      ? 'Laid a new set: ' + pl.tiles.map(tileName).join(', ')
+      : 'Added ' + tileName(pl.tile) + ' to a set on the table';
     applyHintPlay(pl);
     RK.audio.play('place');
     const res = computeHintPlan();
     UI.hint.plan = res.plays; UI.hint.opening = res.opening;
     UI.hint.step = res.plays.length ? 0 : -1;
-    if (!res.plays.length) UI.game.status = 'All suggested tiles placed — press End Turn.';
+    // Plain-language "what just changed" so a learner can follow every step.
+    UI.game.status = '✓ ' + what + (res.plays.length
+      ? ' — ' + res.plays.length + ' more suggested play' + (res.plays.length === 1 ? '' : 's') + '.'
+      : ' — that\'s everything, press End turn ✓.');
     render(); flyForStep();
+    flashBoardTiles(placedIds);
   };
   UI.autoSolveHint = function () { UI.endGuidedHint(); UI.suggest(); };
   UI.endGuidedHint = function () { UI.hint = { active: false, plan: [], step: -1 }; clearHintOverlay(); hintBar(false); render(); };
@@ -1057,9 +1093,10 @@ window.RK = window.RK || {};
 
     game.on('change', render);
     game.on('move', (entry) => { UI.notifyMove(entry); reconcilePending(); });
-    game.on('turnstart', (p) => { if (!p.isAI) UI.commitPending(); });
+    game.on('turnstart', (p) => { if (!p.isAI) { UI.commitPending(); UI.easyCoach(); } });
     resetView();
     render();
+    UI.easyCoach();   // first turn: the constructor emitted turnstart before handlers existed
   };
 
   RK.ui = UI;

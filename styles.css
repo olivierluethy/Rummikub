@@ -122,7 +122,7 @@ body { font-family: ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif; -w
   background: #0f1720; color: #cbd5e1; box-shadow: 0 1px 3px rgba(0,0,0,.5);
 }
 .meld-badge.ok  { color: #34d399; }
-.meld-badge.bad { color: #f87171; }
+.meld-badge.bad { color: #f87171; white-space: normal; max-width: 220px; line-height: 1.15; }
 
 /* ---- Learning hints (Tasks 5 & 9) — colour-coded source→target ---- */
 /* Cyan = the tile(s) to pick up */
@@ -146,6 +146,10 @@ body { font-family: ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif; -w
 
 @keyframes turnpulse { 0%,100% { box-shadow: 0 0 0 0 rgba(251,191,36,.6); } 50% { box-shadow: 0 0 0 6px rgba(251,191,36,0); } }
 .turn-active { animation: turnpulse 1.8s infinite; }
+
+/* Easy-mode: gently pulse the guide button so a beginner always sees the way in */
+@keyframes coachpulse { 0%,100% { box-shadow: 0 0 0 0 rgba(251,191,36,.55); background: rgba(251,191,36,.12); } 50% { box-shadow: 0 0 0 7px rgba(251,191,36,0); background: rgba(251,191,36,.22); } }
+.coach-pulse { animation: coachpulse 1.6s ease-in-out infinite; color: #fde68a; }
 @keyframes popin { from { transform: scale(.6); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 .pop { animation: popin .18s ease; }
 
@@ -156,3 +160,11 @@ body { font-family: ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif; -w
 
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* Respect reduced-motion preferences (accessibility quality floor) */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .001ms !important; animation-iteration-count: 1 !important;
+    transition-duration: .001ms !important; scroll-behavior: auto !important;
+  }
+}
