@@ -107,6 +107,10 @@ body { font-family: ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif; -w
 .tile-pending { opacity: .72; outline: 2px dashed #fbbf24; outline-offset: 1px; }
 .pending-pill { box-shadow: 0 0 0 2px rgba(251,191,36,.6) !important; background: rgba(251,191,36,.10) !important; }
 
+/* Ghost destinations & staged pills are visual guides only — never let the
+   pointer treat them as real drop targets (guards the tile-conservation rule). */
+.hint-ghost-pill, .pending-pill, .tile-ghost-dest { pointer-events: none; }
+
 @keyframes turnpulse { 0%,100% { box-shadow: 0 0 0 0 rgba(251,191,36,.6); } 50% { box-shadow: 0 0 0 6px rgba(251,191,36,0); } }
 .turn-active { animation: turnpulse 1.8s infinite; }
 @keyframes popin { from { transform: scale(.6); opacity: 0; } to { transform: scale(1); opacity: 1; } }

@@ -23,7 +23,15 @@ window.RK = window.RK || {};
     this.rng = config.rng || Math.random;
 
     RK.resetIds();
-    this.deck = RK.createDeck(this.rng);
+    // Larger tables need more tiles than a single 106-tile set holds
+    // (8 players × 14 = 112). Deal from as many identical sets as required so
+    // everyone still gets a full 14-tile hand with a healthy draw pile left.
+    const sets = RK.deckSetsFor(config.players.length);
+    this.deckSets = sets;
+    this.deck = RK.createDeck(this.rng, sets);
+    // The complete set of tile ids that exist in this game. Nothing may ever be
+    // created or destroyed after the deal — see assertConservation().
+    this._ledger = new Set(this.deck.map(t => t.id));
     this.players = config.players.map((p, i) => ({
       id: i, name: p.name, isAI: !!p.isAI,
       rack: this.deck.splice(0, 14),
@@ -66,6 +74,35 @@ window.RK = window.RK || {};
 
   // Drop any now-empty melds (used after the UI removes the last tile from a meld).
   P.pruneEmptyMelds = function () { this.board = this.board.filter(m => m.length > 0); };
+
+  // Every tile id currently accounted for across the draw pile, all racks and the
+  // board. This must always equal the ledger captured at deal time.
+  P.tileCensus = function () {
+    const ids = [];
+    this.deck.forEach(t => ids.push(t.id));
+    this.players.forEach(p => p.rack.forEach(t => ids.push(t.id)));
+    this.board.forEach(m => m.forEach(t => ids.push(t.id)));
+    return ids;
+  };
+
+  // Hard invariant guard. Returns true when tiles are conserved; otherwise warns
+  // with a precise diff so a tile-dropping bug is caught the instant it happens.
+  P.assertConservation = function (where) {
+    const ids = this.tileCensus();
+    const seen = new Set();
+    let dup = null;
+    for (const id of ids) { if (seen.has(id)) dup = id; seen.add(id); }
+    const missing = [...this._ledger].filter(id => !seen.has(id));
+    const extra = ids.filter(id => !this._ledger.has(id));
+    const ok = !dup && missing.length === 0 && extra.length === 0 && ids.length === this._ledger.size;
+    if (!ok) {
+      console.warn('[Rummikub] TILE CONSERVATION VIOLATED @ ' + (where || '?'), {
+        counted: ids.length, expected: this._ledger.size,
+        duplicated: dup, missing: missing, unknown: extra,
+      });
+    }
+    return ok;
+  };
 
   // Record a committed move as a full board snapshot for the history/replay UI.
   P._recordMove = function (player, text, placedIds) {

@@ -31,18 +31,33 @@ window.RK = window.RK || {};
     };
   };
 
-  // Build a full, shuffled deck.
-  RK.createDeck = function (rng) {
+  // One physical Rummikub set = 106 tiles (104 numbered + 2 jokers).
+  RK.TILES_PER_SET = 106;
+
+  // How many identical sets to deal from, given the player count. A single set
+  // comfortably serves up to 4 players (4×14 = 56, leaving 50 to draw). Beyond
+  // that we add sets so everyone gets a full hand with a real draw pile — the
+  // same way physical Rummikub combines two boxes for big groups.
+  RK.deckSetsFor = function (playerCount) {
+    const needed = playerCount * 14 + 20;            // hands + a minimum draw pile
+    return Math.max(1, Math.ceil(needed / RK.TILES_PER_SET));
+  };
+
+  // Build a full, shuffled deck of `sets` identical Rummikub sets (default 1).
+  RK.createDeck = function (rng, sets) {
+    sets = Math.max(1, sets || 1);
     const deck = [];
-    for (const color of RK.COLORS) {
-      for (let n = RK.MIN_NUMBER; n <= RK.MAX_NUMBER; n++) {
-        deck.push(RK.makeTile(color, n, false));
-        deck.push(RK.makeTile(color, n, false));
+    for (let s = 0; s < sets; s++) {
+      for (const color of RK.COLORS) {
+        for (let n = RK.MIN_NUMBER; n <= RK.MAX_NUMBER; n++) {
+          deck.push(RK.makeTile(color, n, false));
+          deck.push(RK.makeTile(color, n, false));
+        }
       }
+      // Two jokers per set, color-tagged only for the printed face.
+      deck.push(RK.makeTile('black', null, true));
+      deck.push(RK.makeTile('red', null, true));
     }
-    // Two jokers. We color-tag them (one "red-ish", one "black-ish") only for the printed face.
-    deck.push(RK.makeTile('black', null, true));
-    deck.push(RK.makeTile('red', null, true));
     return RK.shuffle(deck, rng);
   };
 

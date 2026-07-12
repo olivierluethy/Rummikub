@@ -73,6 +73,7 @@ window.RK = window.RK || {};
     renderHintHighlights();
     updateHintBar();
     runPendingAnim();
+    UI.game.assertConservation('render');
   }
   UI.render = render;
 
@@ -398,6 +399,55 @@ window.RK = window.RK || {};
     return { x: (cx - vp.left - UI.tx) / UI.scale, y: (cy - vp.top - UI.ty) / UI.scale };
   }
 
+  // ---- Snap grid (P2) -------------------------------------------------------
+  // The board is a coordinate grid: one column per tile, one row per meld line.
+  // Melds carry a { _row, _col } anchor; screen position derives from it, so a
+  // tile dropped below another lands flush in the same column, never offset.
+  const GRID = { ox: 24, oy: 26 };
+  function gridCellW() { return cssVar('--tile-w') + 3; }
+  function gridRowH() { return cssVar('--tile-h') + 50; }
+  function colToX(c) { return GRID.ox + c * gridCellW(); }
+  function rowToY(r) { return GRID.oy + r * gridRowH(); }
+  function worldToCell(wx, wy) {
+    return {
+      col: Math.max(0, Math.round((wx - GRID.ox) / gridCellW())),
+      row: Math.max(0, Math.round((wy - GRID.oy) / gridRowH())),
+    };
+  }
+
+  // Placeholder overlay hooks — the visible grid + cell highlight are wired in P2.
+  function hideGridOverlay() { const el = $('grid-overlay'); if (el) el.classList.add('hidden'); }
+
+  // Drop onto open felt: snap to the grid. If the target cell sits flush against
+  // an existing meld on the same row, extend that meld (build a run); otherwise
+  // start a new set anchored at the snapped cell.
+  function placeOnBoard(src, e) {
+    const w = screenToWorld(e.clientX, e.clientY);
+    const cell = worldToCell(w.x, w.y);
+    const neighbour = adjacentMeld(cell);
+    if (neighbour) {
+      safeMove(src, neighbour.meld, neighbour.side === 'left' ? 0 : neighbour.meld.length);
+      return;
+    }
+    const [tile] = src.arr.splice(src.index, 1);
+    const meld = [tile];
+    meld._row = cell.row; meld._col = cell.col; meld._pinned = true;
+    meld._x = colToX(cell.col); meld._y = rowToY(cell.row);
+    UI.game.board.push(meld);
+  }
+
+  // A committed meld the snapped cell is flush-adjacent to (same row, immediately
+  // left of the first tile or right of the last), so dropping there grows it.
+  function adjacentMeld(cell) {
+    for (const m of UI.game.board) {
+      if (m._row == null || m._row !== cell.row) continue;
+      const start = m._col, end = m._col + m.length - 1;
+      if (cell.col === start - 1) return { meld: m, side: 'left' };
+      if (cell.col === end + 1) return { meld: m, side: 'right' };
+    }
+    return null;
+  }
+
   // ---- Model helpers --------------------------------------------------------
   function locate(id) {
     const g = UI.game, p = UI.actor();
@@ -410,12 +460,19 @@ window.RK = window.RK || {};
     return null;
   }
   function computeIndex(containerEl, x, draggedEl) {
-    const tiles = [...containerEl.querySelectorAll('.tile')].filter(t => t !== draggedEl);
+    const tiles = [...containerEl.querySelectorAll('.tile')]
+      .filter(t => t !== draggedEl && !t.classList.contains('tile-ghost-dest') && !t.classList.contains('tile-pending'));
     for (let i = 0; i < tiles.length; i++) {
       const r = tiles[i].getBoundingClientRect();
       if (x < r.left + r.width / 2) return i;
     }
     return tiles.length;
+  }
+
+  // Flat rack index for a pointer position. P3 makes this row-aware; for now it
+  // reads the rack as one wrapped sequence.
+  function rackInsertIndex(x, y, draggedEl) {
+    return computeIndex($('rack'), x, draggedEl);
   }
 
   // ---- Insertion caret (Task 2) --------------------------------------------
@@ -473,10 +530,31 @@ window.RK = window.RK || {};
     // (Over empty felt the pointer ghost itself indicates a new set.)
   }
 
-  function endTileDrag(e) {
-    const g = UI.gesture;
+  function clearDropCues() {
     document.querySelectorAll('.drop-target').forEach(el => el.classList.remove('drop-target'));
     hideCaret();
+    hideGridOverlay();
+  }
+
+  // The ONLY function that moves a tile between arrays. It removes from the source
+  // and inserts into the destination as a single step, so a tile can never be
+  // left "on the floor". Never call splice on a tile's home array anywhere else.
+  function safeMove(src, destArr, insertIdx) {
+    const [tile] = src.arr.splice(src.index, 1);
+    if (destArr === src.arr && src.index < insertIdx) insertIdx--;
+    destArr.splice(insertIdx, 0, tile);
+    return tile;
+  }
+
+  // Drop a tile back into the rack at the pointer's slot (P3 maps this across rows).
+  function rackDrop(src, draggedEl, e) {
+    const dest = UI.actor().rack;
+    safeMove(src, dest, rackInsertIndex(e.clientX, e.clientY, draggedEl));
+  }
+
+  function endTileDrag(e) {
+    const g = UI.gesture;
+    clearDropCues();
     if (!g.active) {                       // a tap, not a drag -> toggle selection (Task 6)
       UI.gesture = null;
       if (UI.selected.has(g.id)) UI.selected.delete(g.id); else UI.selected.add(g.id);
@@ -491,38 +569,33 @@ window.RK = window.RK || {};
     if (!src) { UI.gesture = null; render(); return; }
     const tile = src.arr[src.index];
 
-    const meldEl = under && under.closest('.meld');
+    // Only *committed* melds are real drop targets. Ghost/pending pills carry the
+    // `.meld` class too; matching the data attribute (and pointer-events:none on
+    // ghosts) prevents dropping onto a set that doesn't exist — the old code path
+    // that removed a tile from the rack and then destroyed it.
+    const meldEl = under && under.closest('.meld[data-meld-index]');
     const inRack = under && under.closest('#rack');
     const inBoard = under && under.closest('#board-viewport');
 
     // Pre-placement mode (opponent's turn): update the pending list, not the board.
     if (UI.isStaging()) { stageDrop(g.id, tile, meldEl, inRack, inBoard); UI.gesture = null; return; }
 
-    let dest = null, insertIdx = 0, newMeldPos = null;
+    // Resolve the destination first; only then move the tile. If the drop lands
+    // nowhere valid, the tile simply stays where it was.
     if (meldEl) {
-      dest = UI.game.board[+meldEl.dataset.meldIndex];
-      insertIdx = computeIndex(meldEl, e.clientX, g.el);
+      const dest = UI.game.board[+meldEl.dataset.meldIndex];
+      safeMove(src, dest, computeIndex(meldEl, e.clientX, g.el));
     } else if (inRack) {
-      dest = UI.actor().rack;
-      insertIdx = computeIndex($('rack'), e.clientX, g.el);
+      rackDrop(src, g.el, e);
     } else if (inBoard) {
-      newMeldPos = screenToWorld(e.clientX, e.clientY);
+      placeOnBoard(src, e);              // grid-snapped new set / merge with a neighbour (P2)
     } else {
-      UI.gesture = null; render(); return;   // dropped outside — no change
-    }
-
-    // Mutate model
-    src.arr.splice(src.index, 1);
-    if (newMeldPos) {
-      const meld = [tile]; meld._x = newMeldPos.x; meld._y = newMeldPos.y; meld._pinned = true;
-      UI.game.board.push(meld);
-    } else {
-      if (dest === src.arr && src.index < insertIdx) insertIdx--;
-      dest.splice(insertIdx, 0, tile);
+      UI.gesture = null; render(); return;   // dropped off-table — tile stays put
     }
     UI.game.pruneEmptyMelds();
     RK.audio.play('place');
     UI.gesture = null;
+    UI.game.assertConservation('endTileDrag');
     render();
   }
 
