@@ -419,22 +419,6 @@ window.RK = window.RK || {};
   UI.notifyMove = function (entry) {
     if (entry.isAI && !UI.review.active) UI._pendingAnim = { byIndex: entry.byIndex, placed: entry.placed };
   };
-  UI.openHistory = function () {
-    const list = $('history-list'); list.innerHTML = '';
-    const h = UI.game.history;
-    if (!h.length) { list.innerHTML = '<div class="text-white/50 text-sm">No moves yet.</div>'; }
-    h.forEach((e, i) => {
-      const row = document.createElement('button');
-      row.className = 'w-full text-left rounded-lg px-3 py-2 text-sm bg-white/5 hover:bg-white/10 flex gap-2 items-center';
-      row.innerHTML = '<span class="text-white/40 w-6">' + e.n + '.</span>' +
-        '<span>' + (e.isAI ? '🤖' : '🧑') + '</span>' +
-        '<span class="font-semibold ' + (e.isAI ? 'text-sky-300' : 'text-emerald-300') + '">' + escapeHtml(e.by) + '</span>' +
-        '<span class="text-white/70">' + escapeHtml(e.text) + '</span>';
-      row.onclick = () => { $('history-modal').classList.add('hidden'); UI.enterReview(i); };
-      list.appendChild(row);
-    });
-    $('history-modal').classList.remove('hidden');
-  };
   // Docked, always-visible move list. Rebuilt every render so it tracks live
   // play and the current review position.
   function renderMoveLog() {

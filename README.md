@@ -1,7 +1,8 @@
 # Rummikub — Casino Edition
 
-A polished, browser-based **Rummikub** with single-player (4 AI difficulties) and
-local pass-and-play multiplayer. No build step, no dependencies, no server —
+A polished, browser-based **Rummikub** with single-player (up to **7 AI
+opponents**, 4 difficulties) and local pass-and-play for up to **8 players** with
+shareable **room codes**. No build step, no dependencies, no server —
 **double-click `index.html`** and play. Works on desktop, tablet, and mobile.
 
 > Note: the directory was empty at the start of this project, so this is a
@@ -32,13 +33,22 @@ out; the last player holding tiles is automatically last. A final 🥇🥈🥉 r
 screen is shown. (A stall — everyone passing with an empty draw pile — ranks the
 remaining players by fewest points left.)
 
-**Infinite board:** a pannable/zoomable world (drag empty felt to pan, wheel or
-pinch to zoom, +/−/reset buttons). Melds auto-flow into tidy rows and the world
-always keeps a screenful of empty space below, so it never feels "full". Drag a
-meld's background to pin it anywhere.
+**Board surface + snap grid:** a framed felt board (bevelled rail + inner
+vignette) that reads as a real Rummikub board even when empty. Every meld resolves
+to a `{row, col}` grid anchor, so a set dropped below another lands **flush in the
+same column**, never diagonally offset. Dragging a tile over the board reveals the
+grid raster and lights up the target cell; on drop the tile snaps to it, or merges
+into a flush-adjacent set to build a run. Still pannable/zoomable (drag felt to
+pan, wheel/pinch to zoom); drag a meld's background to move it, and it snaps too.
 
-**Rack:** drag to reorder, drag tiles to/from the board, one-tap **Sort 1–13**
-and **Sort by colour**. In hotseat mode only the active player's rack is shown.
+**Two-row rack:** the flat hand is laid over stacked, shelved rows (two minimum,
+more only on overflow) like a physical tray. Drag tiles freely within and between
+rows with a live insertion caret; one-tap **Sort 1–13** and **Sort by colour**. In
+hotseat mode only the active player's rack is shown.
+
+**Tile conservation:** the game snapshots every tile id at deal time and asserts,
+after every render and every drop, that the draw pile + all racks + the board
+always equal that ledger — a tile can never be duplicated or lost.
 
 **Drag & drop:** custom pointer-based engine (not HTML5 DnD) so mouse and touch
 behave identically. Live validation colours every set green/red as you build,
@@ -47,8 +57,8 @@ exact slot a tile will land in (in the rack and in melds).
 
 ### Learning mode & UX
 
-- **Physical rack tray** — a raised holder with a front ledge and slot grooves,
-  clearly separated from the felt; wraps to a second row.
+- **Physical rack tray** — a raised two-row holder with a front ledge and slot
+  grooves, clearly separated from the felt.
 - **Scannable melds** — each set is a spaced pill with a `RUN · pts` / `GROUP · pts`
   badge; sort buttons are labelled **Runs** / **Groups** with tooltips.
 - **Guided Best move** — instead of dumping the solution, it first tells you *how
@@ -59,13 +69,17 @@ exact slot a tile will land in (in the rack and in melds).
   are called out with an on-screen legend.
 - **Tile selection** — tap to mark tiles; marked tiles float matching plays to the
   front of the guided hint.
-- **Pre-placement** — while an opponent is thinking (single-player), drag tiles
-  onto the board to stage them as amber ghosts; they auto-play when your turn
-  starts. If an opponent's move invalidates a staged append, only those tiles
-  return to your rack.
-- **Move history & replay** — opponent placements animate onto the board; a
-  History modal lists every move and lets you step back/forward through a
-  read-only replay of the board at any point.
+- **Easy-mode coaching** — the step-by-step guide auto-opens on your turn (and the
+  Best-move button pulses), each guided placement flashes green with a plain
+  "what changed" line, and invalid sets explain themselves on the board (e.g.
+  "A set needs at least 3 tiles").
+- **Pre-placement** — while an opponent is thinking (single-player), a non-blocking
+  banner invites you to drag tiles onto the board to stage them as amber ghosts;
+  they auto-play when your turn starts. If an opponent's move invalidates a staged
+  append, only those tiles return to your rack.
+- **Move history** — a docked, chess-style panel lists every move (yours and
+  opponents') as it happens; click any entry or step with the panel's controls to
+  replay the board at that point. Opponent placements animate onto the board.
 
 **Assumptions made** (per "choose a sensible default and note it"): a "play" is
 one atomic placement (a new set, or one tile appended to a set); the guided hint
@@ -137,12 +151,18 @@ uses the exact same engine.
 
 ---
 
-## Multiplayer / networking
+## Multiplayer / room codes
 
-Online multiplayer requires a server (signalling + authoritative state +
-reconnection), which a static file can't provide. Rather than ship something
-broken, the game ships robust **local pass-and-play** with strict turn
-enforcement today, and the engine is deliberately structured so an online
+Local multiplayer is **pass-and-play** for up to 8 players on one device. The host
+generates a **room code** (Copy / New in the lobby); the code seeds the shuffle, so
+any device that enters the same code deals the **identical table** — the join-by-
+code contract without a server. Large tables (needing more than a single 106-tile
+set) automatically deal from a **double set** (212 tiles) so everyone still gets a
+full 14-tile hand with a real draw pile.
+
+True online multiplayer (playing from different devices with live sync) still
+requires a server (signalling + authoritative state + reconnection), which a
+static file can't provide. The engine is deliberately structured so an online
 transport drops in cleanly:
 
 - `game.js` is a pure state machine; a turn is applied by exactly one method.
@@ -158,10 +178,17 @@ as state authority is enough; reconnection replays the last committed snapshot.
 ## Testing
 
 The pure engine is exercised by a Node harness (rules edge cases, joker runs,
-solver partitioning, and full AI-vs-AI games for all four difficulties verifying
-tile conservation, always-valid committed boards, and unique final rankings).
-The browser UI was smoke-tested headlessly (boot with zero JS errors, correct
-deal, sort, Best move, and a synthetic rack→board drag).
+solver partitioning, deck sizing / seeded-deal reproducibility, and full AI games
+including 8-player double-deck tables verifying tile conservation every turn,
+always-valid committed boards, and unique final rankings).
+
+The browser UI is verified headlessly (Chrome), driving real pointer events:
+tiles never vanish when dropped on a hint/ghost pill (conservation holds),
+vertical placement snaps directly below in the same column, the rack renders and
+rearranges across two rows, pre-placement stages and auto-commits, the move panel
+steps through history, easy-mode coaching/reason badges appear, and a full
+real-`main.js` game plays to completion with zero console errors and zero
+conservation violations.
 
 ---
 
