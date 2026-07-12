@@ -1,8 +1,15 @@
-/* Minimal custom CSS — only what Tailwind can't express cleanly:
-   the casino felt, tile face gloss, joker face, and a couple of keyframes.
-   Everything else is Tailwind utilities. */
+/* Tailwind-first: all layout, spacing, colour and typography live in utility
+   classes in the markup. This file is deliberately limited to what Tailwind
+   cannot express cleanly, and each block below is one of those cases:
+     - CSS custom properties shared between CSS and JS (tile metrics)
+     - multi-layer gradients / inset box-shadows (felt board, tile faces, rack
+       tray, meld rings) — expressible only as unwieldy arbitrary values
+     - ::before / ::after decoration (tile gloss, tray lip)
+     - @keyframes animations (Tailwind needs a config to name these)
+   Simple utilities that used to live here (e.g. the rack-row flex rules) have
+   been moved back into Tailwind classes in the markup. */
 
-:root { --tile-w: 46px; --tile-h: 64px; --tile-gap: 3px; }
+:root { --tile-w: 46px; --tile-h: 64px; }
 @media (max-width: 640px) { :root { --tile-w: 38px; --tile-h: 54px; } }
 
 html, body { height: 100%; overscroll-behavior: none; }
@@ -108,9 +115,8 @@ body { font-family: ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif; -w
   background: linear-gradient(180deg, #3c4655 0%, #262d38 100%);
   box-shadow: 0 3px 6px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.08);
 }
-/* Each stacked row sits on its own shelf; tiles rest along the ledge. */
-.rack-row { min-height: var(--tile-h); align-items: flex-start; flex-wrap: wrap; }
-.rack-tray .tile { margin-bottom: 0; }
+/* .rack-row layout is Tailwind (flex flex-wrap items-start min-h-[var(--tile-h)]);
+   the class remains only as a JS hook for row-aware drag handling. */
 
 /* ---- Meld pills on the board ---- */
 .meld { transition: box-shadow .15s ease, border-color .15s ease; }
@@ -152,8 +158,6 @@ body { font-family: ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif; -w
 /* Easy-mode: gently pulse the guide button so a beginner always sees the way in */
 @keyframes coachpulse { 0%,100% { box-shadow: 0 0 0 0 rgba(251,191,36,.55); background: rgba(251,191,36,.12); } 50% { box-shadow: 0 0 0 7px rgba(251,191,36,0); background: rgba(251,191,36,.22); } }
 .coach-pulse { animation: coachpulse 1.6s ease-in-out infinite; color: #fde68a; }
-@keyframes popin { from { transform: scale(.6); opacity: 0; } to { transform: scale(1); opacity: 1; } }
-.pop { animation: popin .18s ease; }
 
 /* Opponent's freshly placed tiles flash green (Task 8) */
 @keyframes placed { 0% { box-shadow: 0 0 0 3px rgba(52,211,153,.95), 0 2px 3px rgba(0,0,0,.45); } 100% { box-shadow: 0 0 0 0 rgba(52,211,153,0), 0 2px 3px rgba(0,0,0,.45); } }

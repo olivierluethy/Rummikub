@@ -247,7 +247,7 @@ window.RK = window.RK || {};
     const size = Math.max(1, Math.ceil(tiles.length / rowCount));
     for (let r = 0; r < rowCount; r++) {
       const rowEl = document.createElement('div');
-      rowEl.className = 'rack-row flex gap-x-[3px]';
+      rowEl.className = 'rack-row flex flex-wrap items-start gap-x-[3px] min-h-[var(--tile-h)]';
       rowEl.dataset.rackRow = r;
       tiles.slice(r * size, (r + 1) * size).forEach(t => rowEl.appendChild(tileEl(t)));
       rack.appendChild(rowEl);
