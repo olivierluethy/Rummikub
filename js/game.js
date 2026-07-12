@@ -31,6 +31,7 @@ window.RK = window.RK || {};
     }));
 
     this.board = [];              // committed melds
+    this.history = [];            // committed moves, for review/replay (Task 8)
     this.turnIndex = 0;
     this.phase = 'playing';       // 'playing' | 'over'
     this.finishedCount = 0;
@@ -65,6 +66,15 @@ window.RK = window.RK || {};
 
   // Drop any now-empty melds (used after the UI removes the last tile from a meld).
   P.pruneEmptyMelds = function () { this.board = this.board.filter(m => m.length > 0); };
+
+  // Record a committed move as a full board snapshot for the history/replay UI.
+  P._recordMove = function (player, text, placedIds) {
+    const snap = this.board.map(m => m.map(t => ({ id: t.id, color: t.color, number: t.number, isJoker: t.isJoker })));
+    const entry = { n: this.history.length + 1, by: player.name, byIndex: player.id,
+      isAI: player.isAI, text, placed: (placedIds || []).slice(), board: snap };
+    this.history.push(entry);
+    this.emit('move', entry);
+  };
 
   // ---- Committing a human turn ---------------------------------------------
   // Returns { ok:true } or { ok:false, reason, mustDraw? }.
@@ -106,6 +116,7 @@ window.RK = window.RK || {};
       player.melded = true;
     }
 
+    this._recordMove(player, 'played ' + placed.length + ' tile' + (placed.length === 1 ? '' : 's'), placed.map(t => t.id));
     this._endTurn(player, /*placedTiles*/true);
     return { ok: true };
   };
@@ -120,6 +131,7 @@ window.RK = window.RK || {};
       player.rack = player.rack.filter(t => !placed.has(t.id));
       if (move.didMeld) player.melded = true;
       this.status = player.name + ' played ' + move.placedIds.length + ' tile' + (move.placedIds.length === 1 ? '' : 's') + '.';
+      this._recordMove(player, 'played ' + move.placedIds.length + ' tile' + (move.placedIds.length === 1 ? '' : 's'), move.placedIds);
       this._endTurn(player, true);
     } else {
       this._drawAndPass(player);
@@ -139,6 +151,7 @@ window.RK = window.RK || {};
     let drew = false;
     if (this.deck.length > 0) { player.rack.push(this.deck.pop()); drew = true; }
     this.status = player.name + (drew ? ' drew a tile.' : ' passed (draw pile empty).');
+    this._recordMove(player, drew ? 'drew a tile' : 'passed', []);
     this._endTurn(player, false, /*drew*/drew);
   };
 

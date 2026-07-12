@@ -77,6 +77,7 @@ window.RK = window.RK || {};
   function wireGame() {
     game.on('turnstart', (p) => {
       resetTimer();
+      if (RK.ui.endGuidedHint) RK.ui.endGuidedHint();
       if (p.isAI && game.phase === 'playing') {
         setTimeout(() => {
           if (game.currentPlayer() === p && game.phase === 'playing') {
@@ -102,12 +103,23 @@ window.RK = window.RK || {};
     $('btn-end').onclick = endTurn;
     $('btn-draw').onclick = () => { game.drawTile(); RK.audio.play('draw'); };
     $('btn-reset').onclick = () => { game.undoTurn(); RK.audio.play('button'); };
-    $('btn-sort-num').onclick = () => RK.ui.sortRack('number');
-    $('btn-sort-color').onclick = () => RK.ui.sortRack('color');
-    $('btn-best').onclick = () => RK.ui.suggest();
+    $('btn-sort-num').onclick = () => RK.ui.sortRack('runs');
+    $('btn-sort-color').onclick = () => RK.ui.sortRack('groups');
+    $('btn-best').onclick = () => RK.ui.startGuidedHint();
+    $('hint-next').onclick = () => RK.ui.nextHint();
+    $('hint-accept').onclick = () => RK.ui.acceptHint();
+    $('hint-auto').onclick = () => RK.ui.autoSolveHint();
+    $('hint-close').onclick = () => RK.ui.endGuidedHint();
     $('zoom-in').onclick = () => { const r = $('board-viewport').getBoundingClientRect(); RK.ui.zoomAround(r.left + r.width / 2, r.top + r.height / 2, 1.15); };
     $('zoom-out').onclick = () => { const r = $('board-viewport').getBoundingClientRect(); RK.ui.zoomAround(r.left + r.width / 2, r.top + r.height / 2, 0.87); };
     $('zoom-reset').onclick = () => RK.ui.resetView();
+
+    // Move history / replay
+    $('btn-history').onclick = () => RK.ui.openHistory();
+    $('history-close').onclick = () => $('history-modal').classList.add('hidden');
+    $('review-prev').onclick = () => RK.ui.reviewStep(-1);
+    $('review-next').onclick = () => RK.ui.reviewStep(1);
+    $('review-exit').onclick = () => RK.ui.exitReview();
 
     // Settings
     $('btn-settings').onclick = () => $('settings-modal').classList.remove('hidden');
