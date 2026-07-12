@@ -990,6 +990,14 @@ window.RK = window.RK || {};
   }
 
   function hintBar(show) { $('hint-bar').classList.toggle('hidden', !show); }
+  // A control is only clickable when it has a real action; otherwise it's disabled
+  // and visibly dimmed, never a no-op you can click.
+  function setHintBtn(id, enabled) {
+    const b = $(id); if (!b) return;
+    b.disabled = !enabled;
+    b.classList.toggle('opacity-40', !enabled);
+    b.classList.toggle('cursor-not-allowed', !enabled);
+  }
   function updateHintBar() {
     const h = UI.hint;
     if (!h.active) { hintBar(false); return; }
@@ -998,9 +1006,10 @@ window.RK = window.RK || {};
     if (h.step >= 0 && h.plan[h.step]) {
       $('hint-msg').innerHTML = '<b>Step ' + (h.step + 1) + ' of ' + total + '.</b> ' + describePlay(h.plan[h.step]);
     }
-    $('hint-next').disabled = h.step >= total - 1;
-    $('hint-next').classList.toggle('opacity-40', h.step >= total - 1);
-    $('hint-accept').disabled = h.step < 0;
+    const hasPlays = total > 0;
+    setHintBtn('hint-next', hasPlays && h.step < total - 1);   // a further step to reveal
+    setHintBtn('hint-accept', hasPlays && h.step >= 0);        // a revealed step to place
+    setHintBtn('hint-auto', hasPlays);                         // something to auto-solve
   }
 
   // Easy mode holds the learner's hand: at the start of their turn, open the
@@ -1031,7 +1040,8 @@ window.RK = window.RK || {};
         ? 'No opening meld reaches 30 points yet — draw a tile (you have ' + (res.openingPts || 0) + ').'
         : 'No plays available from your rack — draw a tile.';
       $('hint-legend').classList.add('hidden');
-      $('hint-next').disabled = true; $('hint-accept').disabled = true;
+      // Nothing playable: no live action, so dim every action button.
+      setHintBtn('hint-next', false); setHintBtn('hint-accept', false); setHintBtn('hint-auto', false);
       return;
     }
     const n = res.plays.length;
@@ -1068,7 +1078,7 @@ window.RK = window.RK || {};
     render(); flyForStep();
     flashBoardTiles(placedIds);
   };
-  UI.autoSolveHint = function () { UI.endGuidedHint(); UI.suggest(); };
+  UI.autoSolveHint = function () { if (!UI.hint.active || !UI.hint.plan.length) return; UI.endGuidedHint(); UI.suggest(); };
   UI.endGuidedHint = function () { UI.hint = { active: false, plan: [], step: -1 }; clearHintOverlay(); hintBar(false); render(); };
 
   UI.suggest = function () {
