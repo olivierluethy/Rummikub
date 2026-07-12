@@ -107,7 +107,8 @@
 
     <div id="status-text" class="px-4 py-1 text-sm text-amber-200/90 bg-slate-900/60 min-h-[1.75rem]"></div>
 
-    <!-- Board -->
+    <!-- Board + move-history side panel -->
+    <div class="flex flex-1 min-h-0">
     <main id="board-viewport" class="relative flex-1 felt overflow-hidden" style="touch-action:none;">
       <!-- Snap grid ("Spielraster"): a transformed raster that lines up with the
            board world; revealed while dragging a tile so placement is flush. -->
@@ -159,6 +160,18 @@
       <!-- Layer for flying hint/opponent-move animations -->
       <div id="hint-layer" class="pointer-events-none fixed inset-0 z-[70]"></div>
     </main>
+
+    <!-- Move history: a docked, chess-style running list you can step through -->
+    <aside id="history-panel" class="flex flex-col w-60 shrink-0 bg-slate-900/85 ring-1 ring-white/10">
+      <div class="flex items-center gap-1 px-3 py-2 border-b border-white/10">
+        <span class="font-semibold text-sm mr-auto">Moves</span>
+        <button id="log-prev" title="Previous move" class="rounded-md bg-white/5 px-2 py-1 text-sm hover:bg-white/10">◀</button>
+        <button id="log-next" title="Next move" class="rounded-md bg-white/5 px-2 py-1 text-sm hover:bg-white/10">▶</button>
+        <button id="log-live" title="Return to the live game" class="rounded-md bg-amber-400 px-2 py-1 text-xs font-bold text-slate-900 hover:bg-amber-300">Live</button>
+      </div>
+      <div id="move-log" class="flex-1 overflow-y-auto no-scrollbar p-2 space-y-1 text-sm"></div>
+    </aside>
+    </div>
 
     <!-- Rack + actions -->
     <footer class="bg-slate-900/90 ring-1 ring-white/10">

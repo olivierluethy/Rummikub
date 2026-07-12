@@ -61,6 +61,7 @@ window.RK = window.RK || {};
   // ---- Rendering ------------------------------------------------------------
   function render() {
     renderHUD();
+    renderMoveLog();
     if (UI.review.active) { renderReview(); applyTransform(); updateControls(); return; }
     $('board-viewport').classList.remove('board-review');
     $('review-bar').classList.add('hidden');
@@ -424,6 +425,44 @@ window.RK = window.RK || {};
     });
     $('history-modal').classList.remove('hidden');
   };
+  // Docked, always-visible move list. Rebuilt every render so it tracks live
+  // play and the current review position.
+  function renderMoveLog() {
+    const log = $('move-log'); if (!log) return;
+    const h = UI.game.history;
+    log.innerHTML = '';
+    if (!h.length) {
+      log.innerHTML = '<div class="text-white/40 px-2 py-3 text-xs">No moves yet. Every placement — yours and your opponents’ — shows up here.</div>';
+    }
+    const activeIdx = UI.review.active ? UI.review.index : h.length - 1;
+    h.forEach((e, i) => {
+      const row = document.createElement('button');
+      row.className = 'w-full text-left rounded-md px-2 py-1.5 flex gap-2 items-center ' +
+        (i === activeIdx ? 'bg-amber-400/20 ring-1 ring-amber-400/70' : 'bg-white/5 hover:bg-white/10');
+      row.innerHTML = '<span class="text-white/40 w-5 text-xs tabular-nums">' + e.n + '</span>' +
+        '<span>' + (e.isAI ? '🤖' : '🧑') + '</span>' +
+        '<span class="font-semibold ' + (e.isAI ? 'text-sky-300' : 'text-emerald-300') + ' truncate">' + escapeHtml(e.by) + '</span>' +
+        '<span class="text-white/60 text-xs truncate ml-auto">' + escapeHtml(e.text) + '</span>';
+      row.onclick = () => UI.enterReview(i);
+      log.appendChild(row);
+    });
+    const activeEl = log.children[activeIdx];
+    if (activeEl && activeEl.scrollIntoView) activeEl.scrollIntoView({ block: 'nearest' });
+    $('log-live').classList.toggle('opacity-40', !UI.review.active);
+  }
+  UI.renderMoveLog = renderMoveLog;
+
+  // Step the docked log/board through history. From live, stepping back enters
+  // review at the latest move; from review it walks the history.
+  UI.logStep = function (d) {
+    const h = UI.game.history; if (!h.length) return;
+    if (!UI.review.active) { if (d < 0) UI.enterReview(h.length - 1); return; }
+    UI.reviewStep(d);
+  };
+  UI.toggleHistoryPanel = function () {
+    const p = $('history-panel'); if (p) p.classList.toggle('hidden');
+  };
+
   UI.enterReview = function (i) { UI.review = { active: true, index: i }; render(); };
   UI.reviewStep = function (d) {
     if (!UI.review.active) return;

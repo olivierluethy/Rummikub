@@ -136,9 +136,11 @@ window.RK = window.RK || {};
     $('zoom-out').onclick = () => { const r = $('board-viewport').getBoundingClientRect(); RK.ui.zoomAround(r.left + r.width / 2, r.top + r.height / 2, 0.87); };
     $('zoom-reset').onclick = () => RK.ui.resetView();
 
-    // Move history / replay
-    $('btn-history').onclick = () => RK.ui.openHistory();
-    $('history-close').onclick = () => $('history-modal').classList.add('hidden');
+    // Move history — docked panel + board review stepping
+    $('btn-history').onclick = () => RK.ui.toggleHistoryPanel();
+    $('log-prev').onclick = () => RK.ui.logStep(-1);
+    $('log-next').onclick = () => RK.ui.logStep(1);
+    $('log-live').onclick = () => RK.ui.exitReview();
     $('review-prev').onclick = () => RK.ui.reviewStep(-1);
     $('review-next').onclick = () => RK.ui.reviewStep(1);
     $('review-exit').onclick = () => RK.ui.exitReview();
@@ -181,6 +183,9 @@ window.RK = window.RK || {};
     $('menu').classList.add('hidden');
     $('game').classList.remove('hidden');
     RK.ui.mount(game);
+    // The move panel is handy on wide screens but crowds a phone — start it
+    // collapsed there; the History button toggles it any time.
+    if (window.innerWidth < 860) $('history-panel').classList.add('hidden');
     resetTimer();
   }
 
