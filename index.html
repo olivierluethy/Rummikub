@@ -102,6 +102,30 @@
         <button id="zoom-out" class="h-10 w-10 rounded-full bg-slate-900/80 ring-1 ring-white/10 text-xl hover:bg-slate-800">－</button>
         <button id="zoom-reset" class="h-10 w-10 rounded-full bg-slate-900/80 ring-1 ring-white/10 text-sm hover:bg-slate-800">⤢</button>
       </div>
+
+      <!-- Guided-hint control bar (Task 5/9) -->
+      <div id="hint-bar" class="hidden absolute left-1/2 -translate-x-1/2 bottom-3 w-[min(94%,640px)] rounded-2xl bg-slate-900/95 ring-1 ring-amber-400/40 shadow-2xl px-4 py-3">
+        <div class="flex items-start gap-3">
+          <span class="text-xl">🎓</span>
+          <div class="flex-1 min-w-0">
+            <div id="hint-msg" class="text-sm text-white/90"></div>
+            <div id="hint-legend" class="hidden mt-1 text-xs text-white/50">
+              <span class="text-cyan-300">◉ pick up</span> &nbsp;→&nbsp;
+              <span class="text-emerald-300">◎ place here</span> &nbsp;·&nbsp;
+              <span class="text-amber-300">▭ resulting set</span>
+            </div>
+          </div>
+        </div>
+        <div class="mt-2 flex flex-wrap justify-end gap-2">
+          <button id="hint-close" class="rounded-lg bg-white/5 px-3 py-1.5 text-sm hover:bg-white/10">Close</button>
+          <button id="hint-auto"  class="rounded-lg bg-white/5 px-3 py-1.5 text-sm hover:bg-white/10" title="Skip the lesson and place the whole solution">Auto-solve</button>
+          <button id="hint-accept" class="rounded-lg bg-sky-500/80 px-3 py-1.5 text-sm font-semibold hover:bg-sky-400">Place this</button>
+          <button id="hint-next"  class="rounded-lg bg-amber-400 px-3 py-1.5 text-sm font-bold text-slate-900 hover:bg-amber-300">Next hint →</button>
+        </div>
+      </div>
+
+      <!-- Layer for flying hint/opponent-move animations -->
+      <div id="hint-layer" class="pointer-events-none fixed inset-0 z-[70]"></div>
     </main>
 
     <!-- Rack + actions -->

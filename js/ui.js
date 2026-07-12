@@ -15,6 +15,9 @@ window.RK = window.RK || {};
     gesture: null,        // active pointer gesture
     pointers: new Map(),  // for pinch
     lastPinchDist: 0,
+    selected: new Set(),  // marked tile ids (Task 6)
+    hint: { active: false, plan: [], step: -1 }, // guided hint (Task 5)
+    caret: null, _flyTimers: [],
   };
 
   // ---- Tile & meld DOM ------------------------------------------------------
@@ -29,7 +32,7 @@ window.RK = window.RK || {};
 
   function tileEl(tile) {
     const el = document.createElement('div');
-    el.className = 'tile';
+    el.className = 'tile' + (UI.selected.has(tile.id) ? ' selected' : '');
     el.dataset.tileId = tile.id;
     if (tile.isJoker) {
       el.innerHTML = jokerSVG(tile.color);
@@ -51,6 +54,8 @@ window.RK = window.RK || {};
     renderRack();
     applyTransform();
     updateControls();
+    renderHintHighlights();
+    updateHintBar();
   }
   UI.render = render;
 
@@ -229,9 +234,15 @@ window.RK = window.RK || {};
 
   // ---- Drag & drop ----------------------------------------------------------
   function startTileDrag(tileEl0, e) {
+    // A manual move supersedes an active guided hint (clear without re-rendering,
+    // which would invalidate the captured drag element).
+    if (UI.hint.active) { UI.hint = { active: false, plan: [], step: -1 }; clearHintOverlay(); hintBar(false); }
     const id = tileEl0.dataset.tileId;
     UI.gesture = { type: 'tile', id, startX: e.clientX, startY: e.clientY, el: tileEl0, ghost: null, active: false };
   }
+
+  function rackTileElById(id) { return $('rack').querySelector('.tile[data-tile-id="' + id + '"]'); }
+  function boardMeldElByIndex(i) { return $('board-world').querySelector('.meld[data-meld-index="' + i + '"]'); }
 
   function moveTileDrag(e) {
     const g = UI.gesture;
@@ -266,7 +277,12 @@ window.RK = window.RK || {};
     const g = UI.gesture;
     document.querySelectorAll('.drop-target').forEach(el => el.classList.remove('drop-target'));
     hideCaret();
-    if (!g.active) { UI.gesture = null; return; }
+    if (!g.active) {                       // a tap, not a drag -> toggle selection (Task 6)
+      UI.gesture = null;
+      if (UI.selected.has(g.id)) UI.selected.delete(g.id); else UI.selected.add(g.id);
+      render();
+      return;
+    }
     g.el.classList.remove('dragging');
     if (g.ghost) g.ghost.remove();
 
@@ -373,6 +389,181 @@ window.RK = window.RK || {};
     RK.audio.play('shuffle');
     render();
   };
+  // ---- Guided learning hint (Tasks 5 & 9) ---------------------------------
+  // Decompose the best move into ATOMIC, individually-valid plays so the player
+  // can step through them one at a time.
+  function computeHintPlan() {
+    const g = UI.game, p = g.currentPlayer();
+    if (!p.melded) {
+      const melds = RK.findMelds(p.rack);
+      const pts = RK.sumMeldPoints(melds).total;
+      const ok = melds.length && pts >= RK.INITIAL_MELD_MIN;
+      return { plays: ok ? melds.map(m => ({ type: 'new', tiles: m })) : [], opening: true, openingPts: pts, openingOk: ok };
+    }
+    const plays = [];
+    let remaining = p.rack.slice();
+    g.board.forEach((meld, idx) => {
+      for (let i = 0; i < remaining.length; i++) {
+        if (RK.validateSet(meld.concat([remaining[i]])).valid) {
+          plays.push({ type: 'append', tile: remaining[i], meldIndex: idx });
+          remaining.splice(i, 1); i--;
+        }
+      }
+    });
+    RK.findMelds(remaining).forEach(m => plays.push({ type: 'new', tiles: m }));
+    // Selected tiles express intent — float plays that use them to the front (Task 6).
+    if (UI.selected.size) {
+      const uses = (pl) => (pl.type === 'new' ? pl.tiles : [pl.tile]).some(t => UI.selected.has(t.id));
+      plays.sort((a, b) => (uses(b) ? 1 : 0) - (uses(a) ? 1 : 0));
+    }
+    return { plays, opening: false };
+  }
+
+  const colorName = { red: 'red', blue: 'blue', orange: 'orange', black: 'black' };
+  function tileName(t) { return t.isJoker ? 'Joker' : (colorName[t.color] + ' ' + t.number); }
+  function describePlay(pl) {
+    return pl.type === 'new'
+      ? 'Lay a new set: ' + pl.tiles.map(tileName).join(', ')
+      : 'Add ' + tileName(pl.tile) + ' to a set already on the table';
+  }
+
+  function applyHintPlay(pl) {
+    const g = UI.game, p = g.currentPlayer();
+    if (pl.type === 'new') {
+      const ids = new Set(pl.tiles.map(t => t.id));
+      p.rack = p.rack.filter(t => !ids.has(t.id));
+      ids.forEach(id => UI.selected.delete(id));
+      g.board.push(pl.tiles.slice());
+    } else {
+      p.rack = p.rack.filter(t => t.id !== pl.tile.id);
+      UI.selected.delete(pl.tile.id);
+      g.board[pl.meldIndex].push(pl.tile);
+    }
+  }
+
+  function freeBoardSpot() {
+    const g = UI.game, tileH = cssVar('--tile-h');
+    let maxBottom = 20;
+    g.board.forEach(m => { if (m._y != null) maxBottom = Math.max(maxBottom, m._y + tileH + 24); });
+    return { x: 24, y: maxBottom + 12 };
+  }
+
+  function flyTo(srcEl, destEl) {
+    if (!srcEl || !destEl) return;
+    const s = srcEl.getBoundingClientRect(), d = destEl.getBoundingClientRect();
+    const clone = srcEl.cloneNode(true);
+    clone.className = 'tile hint-fly';
+    Object.assign(clone.style, { position: 'fixed', left: s.left + 'px', top: s.top + 'px',
+      width: s.width + 'px', height: s.height + 'px', margin: '0', zIndex: 71,
+      transition: 'transform .38s cubic-bezier(.2,.7,.3,1)' });
+    $('hint-layer').appendChild(clone);
+    requestAnimationFrame(() => { clone.style.transform = 'translate(' + (d.left - s.left) + 'px,' + (d.top - s.top) + 'px)'; });
+    const tm = setTimeout(() => clone.remove(), 520);
+    UI._flyTimers.push(tm);
+  }
+
+  function clearHintOverlay() {
+    UI._flyTimers.forEach(clearTimeout); UI._flyTimers = [];
+    const layer = $('hint-layer'); if (layer) layer.innerHTML = '';
+    document.querySelectorAll('.hint-source,.hint-strong,.hint-target-meld')
+      .forEach(el => el.classList.remove('hint-source', 'hint-strong', 'hint-target-meld'));
+  }
+
+  // Idempotent: (re)apply source rings + destination ghosts. Called every render
+  // because the board/rack DOM is rebuilt each time. No animation here.
+  function renderHintHighlights() {
+    if (!UI.hint.active || UI.hint.step < 0) return;
+    const pl = UI.hint.plan[UI.hint.step];
+    if (!pl) return;
+    const easy = UI.game.difficulty === 'easy';
+    const srcTiles = pl.type === 'new' ? pl.tiles : [pl.tile];
+    srcTiles.forEach(t => {
+      const el = rackTileElById(t.id);
+      if (el) { el.classList.add('hint-source'); if (easy) el.classList.add('hint-strong'); }
+    });
+    if (pl.type === 'append') {
+      const meldEl = boardMeldElByIndex(pl.meldIndex);
+      if (meldEl) {
+        meldEl.classList.add('hint-target-meld');
+        const ghost = tileEl(pl.tile); ghost.classList.add('tile-ghost-dest');
+        meldEl.appendChild(ghost);
+      }
+    } else {
+      const pill = document.createElement('div');
+      pill.className = 'meld absolute flex items-center gap-[3px] rounded-xl px-2.5 py-2 hint-ghost-pill';
+      const pos = freeBoardSpot();
+      pill.style.left = pos.x + 'px'; pill.style.top = pos.y + 'px';
+      pl.tiles.forEach(t => { const gt = tileEl(t); gt.classList.add('tile-ghost-dest'); pill.appendChild(gt); });
+      $('board-world').appendChild(pill);
+    }
+  }
+
+  // Animate source -> destination once, when the step changes.
+  function flyForStep() {
+    const layer = $('hint-layer'); layer.innerHTML = '';
+    UI._flyTimers.forEach(clearTimeout); UI._flyTimers = [];
+    if (!UI.hint.active || UI.hint.step < 0) return;
+    const pl = UI.hint.plan[UI.hint.step]; if (!pl) return;
+    const srcId = (pl.type === 'new' ? pl.tiles[0] : pl.tile).id;
+    flyTo(rackTileElById(srcId), document.querySelector('.tile-ghost-dest'));
+  }
+
+  function hintBar(show) { $('hint-bar').classList.toggle('hidden', !show); }
+  function updateHintBar() {
+    const h = UI.hint;
+    if (!h.active) { hintBar(false); return; }
+    const total = h.plan.length;
+    $('hint-legend').classList.toggle('hidden', UI.game.difficulty !== 'easy');
+    if (h.step >= 0 && h.plan[h.step]) {
+      $('hint-msg').innerHTML = '<b>Step ' + (h.step + 1) + ' of ' + total + '.</b> ' + describePlay(h.plan[h.step]);
+    }
+    $('hint-next').disabled = h.step >= total - 1;
+    $('hint-next').classList.toggle('opacity-40', h.step >= total - 1);
+    $('hint-accept').disabled = h.step < 0;
+  }
+
+  UI.startGuidedHint = function () {
+    if (!UI.game.isHumanTurn()) return;
+    const res = computeHintPlan();
+    UI.hint = { active: true, plan: res.plays, step: -1, opening: res.opening };
+    hintBar(true);
+    if (!res.plays.length) {
+      $('hint-msg').textContent = res.opening
+        ? 'No opening meld reaches 30 points yet — draw a tile (you have ' + (res.openingPts || 0) + ').'
+        : 'No plays available from your rack — draw a tile.';
+      $('hint-legend').classList.add('hidden');
+      $('hint-next').disabled = true; $('hint-accept').disabled = true;
+      return;
+    }
+    const n = res.plays.length;
+    const openInfo = res.opening
+      ? ' They form a ' + RK.sumMeldPoints(res.plays.map(p => p.tiles)).total + '-point opening meld — place all of them.'
+      : '';
+    // Show the COUNT first; reveal the actual steps only on Next hint.
+    $('hint-msg').innerHTML = '<b>' + n + ' possible play' + (n === 1 ? '' : 's') + ' this turn.</b>'
+      + openInfo + ' Press <b>Next hint →</b> to reveal them one at a time.';
+    updateHintBar();
+  };
+  UI.nextHint = function () {
+    if (!UI.hint.active) return;
+    UI.hint.step = Math.min(UI.hint.step + 1, UI.hint.plan.length - 1);
+    render(); flyForStep();
+  };
+  UI.acceptHint = function () {
+    if (!UI.hint.active || UI.hint.step < 0) return;
+    const pl = UI.hint.plan[UI.hint.step];
+    if (!pl) return;
+    applyHintPlay(pl);
+    RK.audio.play('place');
+    const res = computeHintPlan();
+    UI.hint.plan = res.plays; UI.hint.opening = res.opening;
+    UI.hint.step = res.plays.length ? 0 : -1;
+    if (!res.plays.length) UI.game.status = 'All suggested tiles placed — press End Turn.';
+    render(); flyForStep();
+  };
+  UI.autoSolveHint = function () { UI.endGuidedHint(); UI.suggest(); };
+  UI.endGuidedHint = function () { UI.hint = { active: false, plan: [], step: -1 }; clearHintOverlay(); hintBar(false); render(); };
+
   UI.suggest = function () {
     const g = UI.game, p = g.currentPlayer();
     if (!p.melded) {

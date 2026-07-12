@@ -91,6 +91,18 @@ body { font-family: ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif; -w
 .meld-badge.ok  { color: #34d399; }
 .meld-badge.bad { color: #f87171; }
 
+/* ---- Learning hints (Tasks 5 & 9) — colour-coded source→target ---- */
+/* Cyan = the tile(s) to pick up */
+.hint-source { outline: 3px solid #22d3ee !important; outline-offset: 2px; box-shadow: 0 0 14px rgba(34,211,238,.85); z-index: 2; }
+.hint-strong { animation: hintpulse 1s ease-in-out infinite; }        /* easy-mode emphasis */
+@keyframes hintpulse { 0%,100% { outline-color: #22d3ee; } 50% { outline-color: #a5f3fc; } }
+/* Green = where it goes (ghost destination tile) */
+.tile-ghost-dest { opacity: .5; outline: 2px dashed #34d399; outline-offset: 1px; }
+.hint-ghost-pill { box-shadow: 0 0 0 2px rgba(52,211,153,.75) !important; background: rgba(16,185,129,.14) !important; }
+/* Amber = the resulting/affected meld */
+.hint-target-meld { box-shadow: 0 0 0 3px rgba(251,191,36,.95), 0 8px 20px rgba(0,0,0,.5) !important; }
+.hint-fly { border-radius: 8px; pointer-events: none; }
+
 @keyframes turnpulse { 0%,100% { box-shadow: 0 0 0 0 rgba(251,191,36,.6); } 50% { box-shadow: 0 0 0 6px rgba(251,191,36,0); } }
 .turn-active { animation: turnpulse 1.8s infinite; }
 @keyframes popin { from { transform: scale(.6); opacity: 0; } to { transform: scale(1); opacity: 1; } }
