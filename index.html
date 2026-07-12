@@ -92,6 +92,11 @@
 
     <!-- Board -->
     <main id="board-viewport" class="relative flex-1 felt overflow-hidden" style="touch-action:none;">
+      <!-- Snap grid ("Spielraster"): a transformed raster that lines up with the
+           board world; revealed while dragging a tile so placement is flush. -->
+      <div id="board-grid" class="board-grid absolute top-0 left-0 pointer-events-none hidden">
+        <div id="grid-cell" class="hidden"></div>
+      </div>
       <div id="board-world" class="absolute top-0 left-0"></div>
 
       <div id="ai-overlay" class="hidden absolute inset-0 flex items-center justify-center bg-black/20 pointer-events-none">

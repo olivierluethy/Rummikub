@@ -8,7 +8,9 @@
 html, body { height: 100%; overscroll-behavior: none; }
 body { font-family: ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif; -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; }
 
-/* Casino felt */
+/* Casino felt board — a defined, framed playing surface (not just a background).
+   A dark bevelled rail wraps the green felt so the play area reads as a real
+   Rummikub board even when empty. */
 .felt {
   background:
     radial-gradient(ellipse at 50% 0%, rgba(255,255,255,0.06), transparent 60%),
@@ -16,6 +18,29 @@ body { font-family: ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif; -w
     repeating-linear-gradient(45deg, rgba(0,0,0,0.04) 0 2px, transparent 2px 4px),
     #0f3d2e;
   background-color: #103f30;
+}
+#board-viewport.felt {
+  /* bevelled graphite rail + deep inner vignette = a board sitting in a frame */
+  box-shadow:
+    inset 0 0 0 3px rgba(10,16,13,.9),
+    inset 0 0 0 14px #1b2a22,
+    inset 0 0 0 15px rgba(255,255,255,.04),
+    inset 0 10px 40px 12px rgba(0,0,0,.5);
+}
+
+/* Snap grid raster — faint tile-cell lines revealed while dragging */
+.board-grid {
+  background-image:
+    linear-gradient(to right, rgba(226,240,233,.09) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(226,240,233,.07) 1px, transparent 1px);
+  z-index: 0;
+}
+#grid-cell {
+  position: absolute; border-radius: 9px;
+  background: rgba(251,191,36,.18);
+  box-shadow: inset 0 0 0 2px rgba(251,191,36,.9), 0 0 22px 2px rgba(251,191,36,.35);
+  transition: left .06s linear, top .06s linear;
+  pointer-events: none;
 }
 
 /* Tile */

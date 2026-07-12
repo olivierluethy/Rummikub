@@ -116,30 +116,50 @@ window.RK = window.RK || {};
     $('ai-overlay').classList.toggle('hidden', g.isHumanTurn() || g.phase === 'over');
   }
 
+  // Grid-based layout. Every meld resolves to a { _row, _col } anchor and its
+  // pixel position derives from that, so melds sit on shared columns and rows —
+  // a set placed below another lands in the same column, never diagonally offset.
   function layoutBoard(board) {
     if (!board) board = UI.review.active ? UI.game.history[UI.review.index].board : UI.game.board;
     const vp = $('board-viewport');
-    const tileW = cssVar('--tile-w'), tileH = cssVar('--tile-h'), gap = 3;
-    const flowWidth = Math.max(vp.clientWidth / UI.scale - 40, 700);
-    const GAP = 28, PILL = 22;            // generous gaps so melds read at a glance
-    let x = 24, y = 26, rowH = 0, maxY = 0, maxX = flowWidth;
+    const cellW = gridCellW(), rowH = gridRowH();
+    const flowWidth = Math.max(vp.clientWidth / UI.scale - 40, 640);
+    const maxCols = Math.max(6, Math.floor((flowWidth - GRID.ox) / cellW));
 
-    for (const meld of board) {
-      if (meld._pinned && meld._x != null) {
-        maxY = Math.max(maxY, meld._y + tileH + 40);
-        maxX = Math.max(maxX, meld._x + meld.length * (tileW + gap) + 40);
-        continue;
+    const occ = {};                       // row -> [[c0,c1], ...] occupied spans
+    const overlaps = (r, c0, c1) => (occ[r] || []).some(([a, b]) => c0 <= b + 1 && c1 >= a - 1); // keep a 1-col gap
+    const mark = (r, c0, c1) => { (occ[r] = occ[r] || []).push([c0, c1]); };
+    let maxRow = 0, maxCol = 0;
+    const anchored = (m) => m._pinned && Number.isInteger(m._row) && Number.isInteger(m._col);
+
+    // Pass 1 — manually-placed melds keep their anchor and reserve their cells.
+    for (const m of board) {
+      if (!anchored(m)) continue;
+      m._x = colToX(m._col); m._y = rowToY(m._row);
+      mark(m._row, m._col, m._col + m.length - 1);
+      maxRow = Math.max(maxRow, m._row); maxCol = Math.max(maxCol, m._col + m.length - 1);
+    }
+    // Pass 2 — flow the remaining melds into the first free run of cells.
+    for (const m of board) {
+      if (anchored(m)) continue;
+      const width = m.length;
+      let done = false;
+      for (let r = 0; !done && r < 500; r++) {
+        for (let c = 0; c + width - 1 < maxCols; c++) {
+          if (overlaps(r, c, c + width - 1)) continue;
+          m._row = r; m._col = c; m._pinned = false;
+          m._x = colToX(c); m._y = rowToY(r);
+          mark(r, c, c + width - 1);
+          maxRow = Math.max(maxRow, r); maxCol = Math.max(maxCol, c + width - 1);
+          done = true; break;
+        }
       }
-      const w = meld.length * (tileW + gap) + PILL;
-      if (x > 24 && x + w > flowWidth) { x = 24; y += rowH + GAP; rowH = 0; }
-      meld._x = x; meld._y = y;
-      x += w + GAP; rowH = Math.max(rowH, tileH + PILL);
-      maxY = Math.max(maxY, y + rowH);
     }
     const world = $('board-world');
-    world.style.width = Math.max(flowWidth + 60, maxX + 60) + 'px';
+    world.style.width = Math.max(flowWidth + 60, colToX(maxCol + 2)) + 'px';
     // Always leave a screen of empty space below so it never feels "full".
-    world.style.height = Math.max(vp.clientHeight / UI.scale, maxY + 500) + 'px';
+    world.style.height = Math.max(vp.clientHeight / UI.scale, rowToY(maxRow + 3)) + 'px';
+    renderGrid();
   }
 
   function renderBoard(board) {
@@ -380,9 +400,12 @@ window.RK = window.RK || {};
 
   // ---- Transform / pan / zoom ----------------------------------------------
   function applyTransform() {
+    const t = 'translate(' + UI.tx + 'px,' + UI.ty + 'px) scale(' + UI.scale + ')';
     const world = $('board-world');
     world.style.transformOrigin = '0 0';
-    world.style.transform = 'translate(' + UI.tx + 'px,' + UI.ty + 'px) scale(' + UI.scale + ')';
+    world.style.transform = t;
+    const grid = $('board-grid');
+    if (grid) { grid.style.transformOrigin = '0 0'; grid.style.transform = t; }
   }
   function zoomAround(cx, cy, factor) {
     const vp = $('board-viewport').getBoundingClientRect();
@@ -415,8 +438,32 @@ window.RK = window.RK || {};
     };
   }
 
-  // Placeholder overlay hooks — the visible grid + cell highlight are wired in P2.
-  function hideGridOverlay() { const el = $('grid-overlay'); if (el) el.classList.add('hidden'); }
+  // Size the raster to the board world and set its cell pitch. Called from layout.
+  function renderGrid() {
+    const grid = $('board-grid'); if (!grid) return;
+    const world = $('board-world');
+    grid.style.width = world.style.width;
+    grid.style.height = world.style.height;
+    grid.style.backgroundSize = gridCellW() + 'px ' + gridRowH() + 'px';
+    grid.style.backgroundPosition = GRID.ox + 'px ' + GRID.oy + 'px';
+  }
+  function showGridOverlay() { const g = $('board-grid'); if (g) g.classList.remove('hidden'); }
+  function hideGridOverlay() {
+    const g = $('board-grid'); if (g) g.classList.add('hidden');
+    const c = $('grid-cell'); if (c) c.classList.add('hidden');
+  }
+  // A meld pill insets its tiles by ~12px (padding + ring); offset cell cues so
+  // they sit exactly under where the tile face will land.
+  const PILL_PAD = 12;
+  // Highlight the single cell a tile would drop into (flush, tile-sized).
+  function highlightCell(cell) {
+    const c = $('grid-cell'); if (!c) return;
+    c.classList.remove('hidden');
+    c.style.left = (colToX(cell.col) + PILL_PAD) + 'px';
+    c.style.top = (rowToY(cell.row) + 14) + 'px';
+    c.style.width = cssVar('--tile-w') + 'px';
+    c.style.height = (cssVar('--tile-h') + 8) + 'px';
+  }
 
   // Drop onto open felt: snap to the grid. If the target cell sits flush against
   // an existing meld on the same row, extend that meld (build a run); otherwise
@@ -434,6 +481,14 @@ window.RK = window.RK || {};
     meld._row = cell.row; meld._col = cell.col; meld._pinned = true;
     meld._x = colToX(cell.col); meld._y = rowToY(cell.row);
     UI.game.board.push(meld);
+  }
+
+  // Snap a whole dragged meld to the nearest grid cell so it stays aligned.
+  function snapMeldToGrid(m) {
+    if (!m) return;
+    const cell = worldToCell(m._x, m._y);
+    m._row = cell.row; m._col = cell.col; m._pinned = true;
+    m._x = colToX(cell.col); m._y = rowToY(cell.row);
   }
 
   // A committed meld the snapped cell is flush-adjacent to (same row, immediately
@@ -515,19 +570,29 @@ window.RK = window.RK || {};
     }
     g.ghost.style.left = e.clientX + 'px';
     g.ghost.style.top = e.clientY + 'px';
-    // Highlight the meld under the pointer + show the exact insertion slot.
+    // Highlight the drop target + show exactly where the tile will land.
     document.querySelectorAll('.drop-target').forEach(el => el.classList.remove('drop-target'));
     hideCaret();
     const under = document.elementFromPoint(e.clientX, e.clientY);
-    const meld = under && under.closest('.meld');
+    const meld = under && under.closest('.meld[data-meld-index]');   // committed sets only
     const rack = under && under.closest('#rack');
-    if (meld) {
-      meld.classList.add('drop-target');
-      showCaretAt(meld, computeIndex(meld, e.clientX, g.el), g.el);
-    } else if (rack) {
-      showCaretAt(rack, computeIndex(rack, e.clientX, g.el), g.el);
+    const inBoard = under && under.closest('#board-viewport');
+    if (rack) {
+      hideGridOverlay();
+      showCaretAt(rack, rackInsertIndex(e.clientX, e.clientY, g.el), g.el);
+    } else if (inBoard) {
+      showGridOverlay();
+      if (meld) {                          // extending a set: caret shows the slot
+        meld.classList.add('drop-target');
+        showCaretAt(meld, computeIndex(meld, e.clientX, g.el), g.el);
+        const c = $('grid-cell'); if (c) c.classList.add('hidden');
+      } else {                             // open felt: light up the snap cell
+        const w = screenToWorld(e.clientX, e.clientY);
+        highlightCell(worldToCell(w.x, w.y));
+      }
+    } else {
+      hideGridOverlay();
     }
-    // (Over empty felt the pointer ghost itself indicates a new set.)
   }
 
   function clearDropCues() {
@@ -647,7 +712,7 @@ window.RK = window.RK || {};
     UI.pointers.delete(e.pointerId);
     const g = UI.gesture;
     if (g && g.type === 'tile') endTileDrag(e);
-    else if (g && g.type === 'meld') { UI.gesture = null; render(); }
+    else if (g && g.type === 'meld') { snapMeldToGrid(g.meld); UI.gesture = null; render(); }
     else UI.gesture = null;
     UI.lastPinchDist = 0;
   }
