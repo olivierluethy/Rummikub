@@ -871,9 +871,12 @@ window.RK = window.RK || {};
   const colorName = { red: 'red', blue: 'blue', orange: 'orange', black: 'black' };
   function tileName(t) { return t.isJoker ? 'Joker' : (colorName[t.color] + ' ' + t.number); }
   function describePlay(pl) {
-    return pl.type === 'new'
-      ? 'Lay a new set: ' + pl.tiles.map(tileName).join(', ')
-      : 'Add ' + tileName(pl.tile) + ' to a set already on the table';
+    if (pl.type === 'new') return 'Lay a new set: ' + pl.tiles.map(tileName).join(', ');
+    // Show the correctly sorted resulting set so the preview is unambiguous.
+    const meld = UI.game.board[pl.meldIndex];
+    const r = RK.validateSet(meld.concat([pl.tile]));
+    const result = (r.order || meld.concat([pl.tile])).map(tileName).join(', ');
+    return 'Add ' + tileName(pl.tile) + ' → makes ' + result;
   }
 
   function applyHintPlay(pl) {
@@ -935,7 +938,12 @@ window.RK = window.RK || {};
       if (meldEl) {
         meldEl.classList.add('hint-target-meld');
         const ghost = tileEl(pl.tile); ghost.classList.add('tile-ghost-dest');
-        meldEl.appendChild(ghost);
+        // Slot the ghost at the tile's correct sorted position, not the end, so
+        // the highlighted target matches where the tile actually belongs.
+        const idx = RK.sortedInsertIndex(UI.game.board[pl.meldIndex], pl.tile);
+        const tiles = [...meldEl.querySelectorAll('.tile')];
+        if (idx >= tiles.length) meldEl.appendChild(ghost);
+        else meldEl.insertBefore(ghost, tiles[idx]);
       }
     } else {
       const pill = document.createElement('div');
