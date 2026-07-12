@@ -98,7 +98,8 @@ window.RK = window.RK || {};
     const vp = $('board-viewport');
     const tileW = cssVar('--tile-w'), tileH = cssVar('--tile-h'), gap = 3;
     const flowWidth = Math.max(vp.clientWidth / UI.scale - 40, 700);
-    let x = 20, y = 20, rowH = 0, maxY = 0, maxX = flowWidth;
+    const GAP = 28, PILL = 22;            // generous gaps so melds read at a glance
+    let x = 24, y = 26, rowH = 0, maxY = 0, maxX = flowWidth;
 
     for (const meld of g.board) {
       if (meld._pinned && meld._x != null) {
@@ -106,10 +107,10 @@ window.RK = window.RK || {};
         maxX = Math.max(maxX, meld._x + meld.length * (tileW + gap) + 40);
         continue;
       }
-      const w = meld.length * (tileW + gap) + 16;
-      if (x > 20 && x + w > flowWidth) { x = 20; y += rowH + 20; rowH = 0; }
+      const w = meld.length * (tileW + gap) + PILL;
+      if (x > 24 && x + w > flowWidth) { x = 24; y += rowH + GAP; rowH = 0; }
       meld._x = x; meld._y = y;
-      x += w + 20; rowH = Math.max(rowH, tileH + 16);
+      x += w + GAP; rowH = Math.max(rowH, tileH + PILL);
       maxY = Math.max(maxY, y + rowH);
     }
     const world = $('board-world');
@@ -125,12 +126,18 @@ window.RK = window.RK || {};
     const results = RK.validateBoard(g.board).results;
     g.board.forEach((meld, i) => {
       const el = document.createElement('div');
-      const ok = results[i].valid;
-      el.className = 'meld absolute flex items-center gap-[3px] rounded-xl p-2 bg-black/25 ' +
+      const r = results[i];
+      const ok = r.valid;
+      el.className = 'meld absolute flex items-center gap-[3px] rounded-xl px-2.5 py-2 bg-black/30 ring-1 ring-white/5 ' +
         (ok ? 'valid' : 'invalid');
       el.style.left = meld._x + 'px';
       el.style.top = meld._y + 'px';
       el.dataset.meldIndex = i;
+      // Scannable badge: type + points, or a warning when the set isn't legal.
+      const badge = document.createElement('div');
+      badge.className = 'meld-badge ' + (ok ? 'ok' : 'bad');
+      badge.textContent = ok ? (r.type === 'run' ? 'RUN' : 'GROUP') + ' · ' + r.points : '✗ invalid';
+      el.appendChild(badge);
       meld.forEach(t => el.appendChild(tileEl(t)));
       world.appendChild(el);
     });
@@ -335,9 +342,11 @@ window.RK = window.RK || {};
   }
 
   // ---- Public actions (wired to buttons in main.js) ------------------------
+  // 'runs'  -> group by colour then ascending number (runs sit together)
+  // 'groups'-> group by number then colour (groups sit together)
   UI.sortRack = function (mode) {
     const p = UI.game.currentPlayer();
-    p.rack.sort(mode === 'color' ? RK.sortByColor : RK.sortByNumber);
+    p.rack.sort(mode === 'groups' ? RK.sortByNumber : RK.sortByColor);
     RK.audio.play('shuffle');
     render();
   };
