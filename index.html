@@ -45,6 +45,10 @@
               <option value="1">1</option>
               <option value="2">2</option>
               <option value="3">3</option>
+              <option value="4">4</option>
+              <option value="5">5</option>
+              <option value="6">6</option>
+              <option value="7">7</option>
             </select>
           </div>
         </div>
@@ -52,16 +56,29 @@
 
       <!-- Local multiplayer -->
       <div id="local-opts" class="space-y-4 hidden">
+        <div class="rounded-xl bg-white/5 ring-1 ring-white/10 p-3 space-y-2">
+          <label class="text-sm text-white/60">Room code</label>
+          <div class="flex gap-2">
+            <input id="room-code" maxlength="6" spellcheck="false"
+              class="flex-1 rounded-lg bg-slate-950/60 px-3 py-2 font-mono text-lg tracking-[0.3em] text-amber-300 text-center uppercase outline-none ring-1 ring-white/10 focus:ring-amber-400" />
+            <button id="room-copy" class="rounded-lg bg-white/5 px-3 text-sm hover:bg-white/10" title="Copy code">Copy</button>
+            <button id="room-new" class="rounded-lg bg-white/5 px-3 text-sm hover:bg-white/10" title="Generate a new code">New</button>
+          </div>
+          <p class="text-xs text-white/45">Pass &amp; play on one device. Share the code so everyone joins the same table — the same code always deals the same tiles.</p>
+        </div>
         <div>
-          <label class="text-sm text-white/60">Players (pass &amp; play)</label>
+          <label class="text-sm text-white/60">Players</label>
           <select id="local-count" class="mt-1 w-full rounded-lg bg-white/5 px-3 py-2 outline-none ring-1 ring-white/10 focus:ring-amber-400">
             <option value="2">2</option>
             <option value="3">3</option>
             <option value="4">4</option>
+            <option value="5">5</option>
+            <option value="6">6</option>
+            <option value="7">7</option>
+            <option value="8">8</option>
           </select>
         </div>
-        <div id="local-names" class="space-y-2"></div>
-        <p class="text-xs text-white/40">Online play uses the same engine behind a networking layer — see the notes in the README.</p>
+        <div id="local-names" class="space-y-2 max-h-52 overflow-y-auto no-scrollbar"></div>
       </div>
 
       <label class="mt-5 flex items-center gap-3 text-sm text-white/70">

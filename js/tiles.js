@@ -61,6 +61,23 @@ window.RK = window.RK || {};
     return RK.shuffle(deck, rng);
   };
 
+  // Deterministic PRNG seeded from a room code, so everyone who enters the same
+  // code deals an identical table (mulberry32 over a hashed string).
+  RK.seededRng = function (str) {
+    let h = 1779033703 ^ String(str).length;
+    for (let i = 0; i < String(str).length; i++) {
+      h = Math.imul(h ^ String(str).charCodeAt(i), 3432918353);
+      h = (h << 13) | (h >>> 19);
+    }
+    let a = h >>> 0;
+    return function () {
+      a |= 0; a = (a + 0x6D2B79F5) | 0;
+      let t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  };
+
   // Fisher–Yates. Accepts an optional deterministic rng() in [0,1) for reproducible games.
   RK.shuffle = function (arr, rng) {
     const r = rng || Math.random;

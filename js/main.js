@@ -18,6 +18,7 @@ window.RK = window.RK || {};
     $('tab-local').className = tabClass(mode === 'local');
     $('single-opts').classList.toggle('hidden', mode !== 'single');
     $('local-opts').classList.toggle('hidden', mode !== 'local');
+    if (mode === 'local' && !$('room-code').value) $('room-code').value = generateCode();
     RK.audio.play('button');
   }
   const tabClass = (on) =>
@@ -37,20 +38,39 @@ window.RK = window.RK || {};
     }
   }
 
+  // Up to seven AI opponents (eight players total; a double tile set is dealt
+  // automatically when the table outgrows a single set — see RK.deckSetsFor).
+  const BOT_NAMES = ['Ruby', 'Sapphire', 'Onyx', 'Jade', 'Amber', 'Pearl', 'Garnet'];
+
+  function generateCode() {
+    const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';   // no easily-confused chars
+    let code = '';
+    for (let i = 0; i < 5; i++) code += alphabet[Math.floor(Math.random() * alphabet.length)];
+    return code;
+  }
+  function currentRoomCode() {
+    let code = ($('room-code').value || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
+    if (!code) { code = generateCode(); $('room-code').value = code; }
+    return code;
+  }
+
   function buildConfig() {
     const timer = $('opt-timer').checked ? 60 : 0;
     if (menuState.mode === 'single') {
       const name = ($('single-name').value || 'You').trim();
       const diff = $('single-diff').value;
-      const n = parseInt($('single-ai').value, 10);
+      const n = Math.min(BOT_NAMES.length, parseInt($('single-ai').value, 10));
       const players = [{ name, isAI: false }];
-      const bots = ['Ruby', 'Sapphire', 'Onyx'];
-      for (let i = 0; i < n; i++) players.push({ name: bots[i] + ' (AI)', isAI: true });
+      for (let i = 0; i < n; i++) players.push({ name: BOT_NAMES[i] + ' (AI)', isAI: true });
       return { mode: 'single', difficulty: diff, timerSeconds: timer, players };
     }
     const players = [...document.querySelectorAll('[data-local-name]')]
       .map((inp, i) => ({ name: (inp.value || 'Player ' + (i + 1)).trim(), isAI: false }));
-    return { mode: 'local', difficulty: 'medium', timerSeconds: timer, players };
+    // The room code seeds the deal so every device that enters it gets the same
+    // table — the join-by-code contract for offline pass-and-play.
+    const code = currentRoomCode();
+    return { mode: 'local', difficulty: 'medium', timerSeconds: timer, players,
+      roomCode: code, rng: RK.seededRng(code + ':' + players.length) };
   }
 
   // ---- Timer ----------------------------------------------------------------
@@ -170,6 +190,13 @@ window.RK = window.RK || {};
     $('tab-local').onclick = () => setMode('local');
     $('single-ai').onchange = (e) => { menuState.aiCount = +e.target.value; };
     $('local-count').onchange = (e) => { menuState.localCount = +e.target.value; renderLocalNames(); };
+    $('room-new').onclick = () => { $('room-code').value = generateCode(); RK.audio.play('button'); };
+    $('room-copy').onclick = () => {
+      const code = currentRoomCode();
+      if (navigator.clipboard) navigator.clipboard.writeText(code).catch(() => {});
+      $('room-copy').textContent = 'Copied';
+      setTimeout(() => { $('room-copy').textContent = 'Copy'; }, 1200);
+    };
     $('btn-start').onclick = startGame;
     renderLocalNames();
     setMode('single');
