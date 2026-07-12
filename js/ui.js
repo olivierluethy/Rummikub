@@ -195,9 +195,10 @@ window.RK = window.RK || {};
       const p = UI.actor();
       $('rack-owner').textContent = staging
         ? p.name + ' — pre-placing (auto-plays on your turn)'
-        : p.name + "'s rack";
+        : rackOwnerLabel(p);
       const pend = new Set(UI.pending.map(x => x.id));   // pending tiles show as ghosts on the board
-      p.rack.forEach(t => { if (!pend.has(t.id)) rack.appendChild(tileEl(t)); });
+      const tiles = p.rack.filter(t => !pend.has(t.id));
+      renderRackRows(rack, tiles);
       return;
     }
 
@@ -208,6 +209,32 @@ window.RK = window.RK || {};
       hint.className = 'text-white/40 text-sm px-3 py-4';
       hint.textContent = 'Pass the device when it’s your turn.';
       rack.appendChild(hint);
+    }
+  }
+
+  // "Your rack" reads naturally for the default name; everyone else is possessive.
+  function rackOwnerLabel(p) { return p.name === 'You' ? 'Your rack' : p.name + '’s rack'; }
+
+  // How many tiles fit on one rack row at the current tray width.
+  function rackPerRow() {
+    const rack = $('rack');
+    const inner = Math.max(1, rack.clientWidth - 30);
+    return Math.max(1, Math.floor(inner / (cssVar('--tile-w') + 3)));
+  }
+
+  // Lay the flat rack out over stacked rows (min two, more only on overflow), so
+  // it reads like a physical two-row Rummikub tray. Tiles stay in flat order, so
+  // dragging one to the lower row simply moves it later in that order.
+  function renderRackRows(rack, tiles) {
+    const perRow = rackPerRow();
+    const rowCount = Math.max(2, Math.ceil(tiles.length / perRow));
+    const size = Math.max(1, Math.ceil(tiles.length / rowCount));
+    for (let r = 0; r < rowCount; r++) {
+      const rowEl = document.createElement('div');
+      rowEl.className = 'rack-row flex gap-x-[3px]';
+      rowEl.dataset.rackRow = r;
+      tiles.slice(r * size, (r + 1) * size).forEach(t => rowEl.appendChild(tileEl(t)));
+      rack.appendChild(rowEl);
     }
   }
 
@@ -524,10 +551,32 @@ window.RK = window.RK || {};
     return tiles.length;
   }
 
-  // Flat rack index for a pointer position. P3 makes this row-aware; for now it
-  // reads the rack as one wrapped sequence.
+  // Flat rack index for a pointer position on the multi-row tray. The rack is a
+  // flat array wrapped across rows; this maps a 2-D pointer to the flat slot so a
+  // tile can be arranged freely on the top or bottom row.
+  function rackTilesInOrder(draggedEl) {
+    return [...$('rack').querySelectorAll('.tile')].filter(c => c !== draggedEl &&
+      !c.classList.contains('tile-ghost-dest') && !c.classList.contains('tile-pending'));
+  }
   function rackInsertIndex(x, y, draggedEl) {
-    return computeIndex($('rack'), x, draggedEl);
+    const tiles = rackTilesInOrder(draggedEl);
+    if (!tiles.length) return 0;
+    const rows = [];
+    tiles.forEach((el, i) => {
+      const r = el.getBoundingClientRect();
+      let row = rows.find(rw => Math.abs(rw.top - r.top) < r.height * 0.6);
+      if (!row) { row = { top: r.top, h: r.height, items: [] }; rows.push(row); }
+      row.items.push({ i, r });
+    });
+    rows.sort((a, b) => a.top - b.top);
+    // The lowest row that starts at or above the pointer (clamps to top row).
+    let row = rows[0];
+    for (const rw of rows) { if (y >= rw.top - 6) row = rw; }
+    // Below every row → append to the very end.
+    const last = rows[rows.length - 1];
+    if (y > last.top + last.h) return tiles.length;
+    for (const it of row.items) { if (x < it.r.left + it.r.width / 2) return it.i; }
+    return row.items[row.items.length - 1].i + 1;
   }
 
   // ---- Insertion caret (Task 2) --------------------------------------------
@@ -542,6 +591,20 @@ window.RK = window.RK || {};
     const tiles = [...container.children].filter(c => c.classList.contains('tile') && c !== draggedEl);
     if (index >= tiles.length) container.appendChild(caret);
     else container.insertBefore(caret, tiles[index]);
+  }
+  // Caret for the multi-row rack: place it before the tile at the flat index,
+  // in whichever row that tile lives (or at the end of the last row).
+  function showRackCaret(flatIndex, draggedEl) {
+    hideCaret();
+    const caret = getCaret();
+    const tiles = rackTilesInOrder(draggedEl);
+    if (flatIndex >= tiles.length) {
+      const rows = $('rack').querySelectorAll('.rack-row');
+      (rows[rows.length - 1] || $('rack')).appendChild(caret);
+    } else {
+      const t = tiles[flatIndex];
+      t.parentNode.insertBefore(caret, t);
+    }
   }
 
   // ---- Drag & drop ----------------------------------------------------------
@@ -579,7 +642,7 @@ window.RK = window.RK || {};
     const inBoard = under && under.closest('#board-viewport');
     if (rack) {
       hideGridOverlay();
-      showCaretAt(rack, rackInsertIndex(e.clientX, e.clientY, g.el), g.el);
+      showRackCaret(rackInsertIndex(e.clientX, e.clientY, g.el), g.el);
     } else if (inBoard) {
       showGridOverlay();
       if (meld) {                          // extending a set: caret shows the slot

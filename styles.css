@@ -77,17 +77,23 @@ body { font-family: ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif; -w
 }
 @keyframes caretpulse { 0%,100% { opacity: .7; } 50% { opacity: 1; } }
 
-/* ---- Rack "tray": a physical, raised tile holder with a front ledge ---- */
+/* ---- Rack "tray": a physical, raised two-row tile holder ----
+   Tiles wrap naturally across the rows; horizontal shelves + vertical grooves
+   make each row read as a real slotted ledge you rest tiles on. */
 .rack-tray {
+  --row-pitch: calc(var(--tile-h) + 6px);   /* matches the row stack gap */
   position: relative;
-  background:
-    linear-gradient(180deg, #313a4a 0%, #28303d 55%, #1d232e 100%);
-  /* faint vertical grooves so tiles read as sitting in slots */
+  /* vertical slot grooves + horizontal shelf shadows for each row */
   background-image:
-    repeating-linear-gradient(90deg, rgba(255,255,255,.035) 0 1px, transparent 1px calc(var(--tile-w) + 3px)),
+    repeating-linear-gradient(90deg, rgba(255,255,255,.04) 0 1px, transparent 1px calc(var(--tile-w) + 3px)),
+    repeating-linear-gradient(180deg,
+      rgba(255,255,255,.05) 0 1px,
+      transparent 1px calc(var(--row-pitch) - 4px),
+      rgba(0,0,0,.34) calc(var(--row-pitch) - 4px) var(--row-pitch)),
     linear-gradient(180deg, #313a4a 0%, #28303d 55%, #1d232e 100%);
+  background-position: 8px 12px, 0 12px, 0 0;
   border-radius: 16px;
-  padding: 12px 14px 22px;
+  padding: 12px 14px 20px;
   box-shadow:
     inset 0 3px 8px rgba(0,0,0,.55),
     inset 0 -2px 0 rgba(255,255,255,.04),
@@ -95,12 +101,14 @@ body { font-family: ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif; -w
   align-content: flex-start;
 }
 .rack-tray::after {            /* the front lip the tiles lean against */
-  content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 14px;
+  content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 12px;
   border-radius: 0 0 16px 16px;
   background: linear-gradient(180deg, #3c4655 0%, #262d38 100%);
   box-shadow: 0 3px 6px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.08);
 }
-.rack-tray .tile { margin-bottom: 4px; }
+/* Each stacked row sits on its own shelf; tiles rest along the ledge. */
+.rack-row { min-height: var(--tile-h); align-items: flex-start; flex-wrap: wrap; }
+.rack-tray .tile { margin-bottom: 0; }
 
 /* ---- Meld pills on the board ---- */
 .meld { transition: box-shadow .15s ease, border-color .15s ease; }
