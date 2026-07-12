@@ -213,6 +213,20 @@ window.RK = window.RK || {};
     return tiles.length;
   }
 
+  // ---- Insertion caret (Task 2) --------------------------------------------
+  function getCaret() {
+    if (!UI.caret) { UI.caret = document.createElement('div'); UI.caret.className = 'insert-caret'; }
+    return UI.caret;
+  }
+  function hideCaret() { if (UI.caret && UI.caret.parentNode) UI.caret.parentNode.removeChild(UI.caret); }
+  function showCaretAt(container, index, draggedEl) {
+    hideCaret();
+    const caret = getCaret();
+    const tiles = [...container.children].filter(c => c.classList.contains('tile') && c !== draggedEl);
+    if (index >= tiles.length) container.appendChild(caret);
+    else container.insertBefore(caret, tiles[index]);
+  }
+
   // ---- Drag & drop ----------------------------------------------------------
   function startTileDrag(tileEl0, e) {
     const id = tileEl0.dataset.tileId;
@@ -233,16 +247,25 @@ window.RK = window.RK || {};
     }
     g.ghost.style.left = e.clientX + 'px';
     g.ghost.style.top = e.clientY + 'px';
-    // Highlight the meld under the pointer.
+    // Highlight the meld under the pointer + show the exact insertion slot.
     document.querySelectorAll('.drop-target').forEach(el => el.classList.remove('drop-target'));
+    hideCaret();
     const under = document.elementFromPoint(e.clientX, e.clientY);
     const meld = under && under.closest('.meld');
-    if (meld) meld.classList.add('drop-target');
+    const rack = under && under.closest('#rack');
+    if (meld) {
+      meld.classList.add('drop-target');
+      showCaretAt(meld, computeIndex(meld, e.clientX, g.el), g.el);
+    } else if (rack) {
+      showCaretAt(rack, computeIndex(rack, e.clientX, g.el), g.el);
+    }
+    // (Over empty felt the pointer ghost itself indicates a new set.)
   }
 
   function endTileDrag(e) {
     const g = UI.gesture;
     document.querySelectorAll('.drop-target').forEach(el => el.classList.remove('drop-target'));
+    hideCaret();
     if (!g.active) { UI.gesture = null; return; }
     g.el.classList.remove('dragging');
     if (g.ghost) g.ghost.remove();
