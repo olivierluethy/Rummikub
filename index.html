@@ -83,6 +83,7 @@
       <div id="meld-progress" class="hidden text-sm rounded-lg bg-white/5 px-3 py-1.5"></div>
       <div id="timer-box" class="hidden text-sm rounded-lg bg-white/5 px-3 py-1.5">⏱ <span id="timer-text" class="font-bold"></span></div>
       <div class="text-sm rounded-lg bg-white/5 px-3 py-1.5">🁢 Pile: <b id="deck-count">0</b></div>
+      <button id="btn-history" title="Review the move history" class="rounded-lg bg-white/5 px-3 py-1.5 hover:bg-white/10 text-sm">🕑 History</button>
       <button id="btn-settings" class="rounded-lg bg-white/5 px-3 py-1.5 hover:bg-white/10">⚙</button>
       <button id="btn-newgame" class="rounded-lg bg-white/5 px-3 py-1.5 hover:bg-white/10 text-sm">New</button>
     </header>
@@ -124,6 +125,14 @@
         </div>
       </div>
 
+      <!-- Move-history review bar (Task 8) -->
+      <div id="review-bar" class="hidden absolute left-1/2 -translate-x-1/2 top-3 flex items-center gap-2 rounded-2xl bg-slate-900/95 ring-1 ring-sky-400/40 shadow-2xl px-3 py-2">
+        <button id="review-prev" class="rounded-lg bg-white/5 px-3 py-1.5 text-sm hover:bg-white/10">◀</button>
+        <span id="review-text" class="text-sm text-white/90 min-w-[10rem] text-center"></span>
+        <button id="review-next" class="rounded-lg bg-white/5 px-3 py-1.5 text-sm hover:bg-white/10">▶</button>
+        <button id="review-exit" class="rounded-lg bg-amber-400 px-3 py-1.5 text-sm font-bold text-slate-900 hover:bg-amber-300">Return to live</button>
+      </div>
+
       <!-- Layer for flying hint/opponent-move animations -->
       <div id="hint-layer" class="pointer-events-none fixed inset-0 z-[70]"></div>
     </main>
@@ -154,6 +163,17 @@
       <label class="flex items-center justify-between"><span>Sound effects</span>
         <input id="opt-sfx" type="checkbox" checked class="h-5 w-5 accent-amber-400" /></label>
       <button id="settings-close" class="w-full rounded-xl bg-amber-400 py-2 font-bold text-slate-900">Close</button>
+    </div>
+  </div>
+
+  <div id="history-modal" class="hidden fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4">
+    <div class="w-full max-w-sm rounded-2xl bg-slate-900 ring-1 ring-white/10 p-5 flex flex-col max-h-[80vh]">
+      <div class="flex items-center justify-between mb-3">
+        <div class="text-lg font-bold">🕑 Move history</div>
+        <button id="history-close" class="rounded-lg bg-white/5 px-3 py-1 text-sm hover:bg-white/10">Close</button>
+      </div>
+      <div id="history-list" class="space-y-1.5 overflow-y-auto no-scrollbar"></div>
+      <p class="mt-3 text-xs text-white/40">Pick a move to replay the board at that point.</p>
     </div>
   </div>
 

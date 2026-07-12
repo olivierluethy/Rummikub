@@ -17,7 +17,8 @@ window.RK = window.RK || {};
     lastPinchDist: 0,
     selected: new Set(),  // marked tile ids (Task 6)
     hint: { active: false, plan: [], step: -1 }, // guided hint (Task 5)
-    caret: null, _flyTimers: [],
+    review: { active: false, index: 0 }, // move-history replay (Task 8)
+    caret: null, _flyTimers: [], _pendingAnim: null,
   };
 
   // ---- Tile & meld DOM ------------------------------------------------------
@@ -49,13 +50,17 @@ window.RK = window.RK || {};
   // ---- Rendering ------------------------------------------------------------
   function render() {
     renderHUD();
-    layoutBoard();
-    renderBoard();
+    if (UI.review.active) { renderReview(); applyTransform(); updateControls(); return; }
+    $('board-viewport').classList.remove('board-review');
+    $('review-bar').classList.add('hidden');
+    layoutBoard(UI.game.board);
+    renderBoard(UI.game.board);
     renderRack();
     applyTransform();
     updateControls();
     renderHintHighlights();
     updateHintBar();
+    runPendingAnim();
   }
   UI.render = render;
 
@@ -98,15 +103,15 @@ window.RK = window.RK || {};
     $('ai-overlay').classList.toggle('hidden', g.isHumanTurn() || g.phase === 'over');
   }
 
-  function layoutBoard() {
-    const g = UI.game;
+  function layoutBoard(board) {
+    if (!board) board = UI.review.active ? UI.game.history[UI.review.index].board : UI.game.board;
     const vp = $('board-viewport');
     const tileW = cssVar('--tile-w'), tileH = cssVar('--tile-h'), gap = 3;
     const flowWidth = Math.max(vp.clientWidth / UI.scale - 40, 700);
     const GAP = 28, PILL = 22;            // generous gaps so melds read at a glance
     let x = 24, y = 26, rowH = 0, maxY = 0, maxX = flowWidth;
 
-    for (const meld of g.board) {
+    for (const meld of board) {
       if (meld._pinned && meld._x != null) {
         maxY = Math.max(maxY, meld._y + tileH + 40);
         maxX = Math.max(maxX, meld._x + meld.length * (tileW + gap) + 40);
@@ -124,12 +129,11 @@ window.RK = window.RK || {};
     world.style.height = Math.max(vp.clientHeight / UI.scale, maxY + 500) + 'px';
   }
 
-  function renderBoard() {
-    const g = UI.game;
+  function renderBoard(board) {
     const world = $('board-world');
     world.innerHTML = '';
-    const results = RK.validateBoard(g.board).results;
-    g.board.forEach((meld, i) => {
+    const results = RK.validateBoard(board).results;
+    board.forEach((meld, i) => {
       const el = document.createElement('div');
       const r = results[i];
       const ok = r.valid;
@@ -168,7 +172,7 @@ window.RK = window.RK || {};
 
   function updateControls() {
     const g = UI.game;
-    const human = g.isHumanTurn();
+    const human = g.isHumanTurn() && !UI.review.active;
     ['btn-sort-num', 'btn-sort-color', 'btn-draw', 'btn-reset', 'btn-end', 'btn-best'].forEach(id => {
       const b = $(id); if (b) b.disabled = !human;
       if (b) b.classList.toggle('opacity-40', !human);
@@ -176,6 +180,75 @@ window.RK = window.RK || {};
   }
 
   function escapeHtml(s) { return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+
+  // ---- Move history & replay (Task 8) --------------------------------------
+  function renderReview() {
+    const h = UI.game.history;
+    const entry = h[UI.review.index];
+    $('board-viewport').classList.add('board-review');
+    if (!entry) { $('board-world').innerHTML = ''; return; }
+    const melds = entry.board.map(m => m.slice());
+    layoutBoard(melds);
+    renderBoard(melds);
+    entry.placed.forEach(id => {
+      const el = $('board-world').querySelector('.tile[data-tile-id="' + id + '"]');
+      if (el) el.classList.add('just-placed');
+    });
+    $('review-bar').classList.remove('hidden');
+    $('review-text').innerHTML = 'Move ' + entry.n + '/' + h.length + ' — <b>' + escapeHtml(entry.by) + '</b> ' + escapeHtml(entry.text);
+    $('review-prev').disabled = UI.review.index <= 0;
+    $('review-next').disabled = UI.review.index >= h.length - 1;
+    hintBar(false);
+  }
+
+  // Fly an opponent's freshly placed tiles from their HUD chip to the board.
+  function runPendingAnim() {
+    const a = UI._pendingAnim; if (!a) return; UI._pendingAnim = null;
+    const chip = $('players-bar').children[a.byIndex];
+    const src = chip ? chip.getBoundingClientRect() : null;
+    a.placed.forEach(id => {
+      const el = $('board-world').querySelector('.tile[data-tile-id="' + id + '"]');
+      if (!el) return;
+      el.classList.add('just-placed');
+      const rm = setTimeout(() => el.classList.remove('just-placed'), 700); UI._flyTimers.push(rm);
+      if (!src) return;
+      const d = el.getBoundingClientRect();
+      const clone = el.cloneNode(true); clone.className = 'tile hint-fly';
+      Object.assign(clone.style, { position: 'fixed', left: src.left + 'px', top: src.top + 'px',
+        width: d.width + 'px', height: d.height + 'px', margin: '0', zIndex: 71,
+        transition: 'transform .42s cubic-bezier(.2,.7,.3,1)' });
+      $('hint-layer').appendChild(clone);
+      requestAnimationFrame(() => { clone.style.transform = 'translate(' + (d.left - src.left) + 'px,' + (d.top - src.top) + 'px)'; });
+      const tm = setTimeout(() => clone.remove(), 600); UI._flyTimers.push(tm);
+    });
+  }
+
+  UI.notifyMove = function (entry) {
+    if (entry.isAI && !UI.review.active) UI._pendingAnim = { byIndex: entry.byIndex, placed: entry.placed };
+  };
+  UI.openHistory = function () {
+    const list = $('history-list'); list.innerHTML = '';
+    const h = UI.game.history;
+    if (!h.length) { list.innerHTML = '<div class="text-white/50 text-sm">No moves yet.</div>'; }
+    h.forEach((e, i) => {
+      const row = document.createElement('button');
+      row.className = 'w-full text-left rounded-lg px-3 py-2 text-sm bg-white/5 hover:bg-white/10 flex gap-2 items-center';
+      row.innerHTML = '<span class="text-white/40 w-6">' + e.n + '.</span>' +
+        '<span>' + (e.isAI ? '🤖' : '🧑') + '</span>' +
+        '<span class="font-semibold ' + (e.isAI ? 'text-sky-300' : 'text-emerald-300') + '">' + escapeHtml(e.by) + '</span>' +
+        '<span class="text-white/70">' + escapeHtml(e.text) + '</span>';
+      row.onclick = () => { $('history-modal').classList.add('hidden'); UI.enterReview(i); };
+      list.appendChild(row);
+    });
+    $('history-modal').classList.remove('hidden');
+  };
+  UI.enterReview = function (i) { UI.review = { active: true, index: i }; render(); };
+  UI.reviewStep = function (d) {
+    if (!UI.review.active) return;
+    UI.review.index = Math.max(0, Math.min(UI.game.history.length - 1, UI.review.index + d));
+    render();
+  };
+  UI.exitReview = function () { UI.review.active = false; $('board-viewport').classList.remove('board-review'); render(); };
 
   // ---- Transform / pan / zoom ----------------------------------------------
   function applyTransform() {
@@ -345,6 +418,7 @@ window.RK = window.RK || {};
 
   // ---- Pointer routing ------------------------------------------------------
   function onPointerDown(e) {
+    if (UI.review.active) return;           // board is read-only while reviewing history
     UI.pointers.set(e.pointerId, e);
     if (UI.pointers.size === 2) { beginPinch(); return; }
     if (!UI.game.isHumanTurn()) return;
@@ -602,6 +676,7 @@ window.RK = window.RK || {};
     vp.addEventListener('wheel', (e) => { e.preventDefault(); zoomAround(e.clientX, e.clientY, e.deltaY < 0 ? 1.1 : 0.9); }, { passive: false });
 
     game.on('change', render);
+    game.on('move', UI.notifyMove);
     resetView();
     render();
   };

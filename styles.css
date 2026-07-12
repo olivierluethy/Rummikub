@@ -108,5 +108,10 @@ body { font-family: ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif; -w
 @keyframes popin { from { transform: scale(.6); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 .pop { animation: popin .18s ease; }
 
+/* Opponent's freshly placed tiles flash green (Task 8) */
+@keyframes placed { 0% { box-shadow: 0 0 0 3px rgba(52,211,153,.95), 0 2px 3px rgba(0,0,0,.45); } 100% { box-shadow: 0 0 0 0 rgba(52,211,153,0), 0 2px 3px rgba(0,0,0,.45); } }
+.tile.just-placed { animation: placed .7s ease-out; }
+.board-review .meld { opacity: .96; }
+
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }

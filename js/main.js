@@ -114,6 +114,13 @@ window.RK = window.RK || {};
     $('zoom-out').onclick = () => { const r = $('board-viewport').getBoundingClientRect(); RK.ui.zoomAround(r.left + r.width / 2, r.top + r.height / 2, 0.87); };
     $('zoom-reset').onclick = () => RK.ui.resetView();
 
+    // Move history / replay
+    $('btn-history').onclick = () => RK.ui.openHistory();
+    $('history-close').onclick = () => $('history-modal').classList.add('hidden');
+    $('review-prev').onclick = () => RK.ui.reviewStep(-1);
+    $('review-next').onclick = () => RK.ui.reviewStep(1);
+    $('review-exit').onclick = () => RK.ui.exitReview();
+
     // Settings
     $('btn-settings').onclick = () => $('settings-modal').classList.remove('hidden');
     $('settings-close').onclick = () => $('settings-modal').classList.add('hidden');
