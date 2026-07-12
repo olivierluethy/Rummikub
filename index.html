@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Rummikub — Casino Edition</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body class="h-full bg-[#0b1220] text-slate-100 overflow-hidden">
+
+  <!-- ======================= MENU ======================= -->
+  <div id="menu" class="fixed inset-0 flex items-center justify-center p-4 overflow-auto
+       bg-[radial-gradient(ellipse_at_top,#15304a,transparent),radial-gradient(ellipse_at_bottom,#0b1220,#0b1220)]">
+    <div class="w-full max-w-md rounded-3xl bg-slate-900/80 backdrop-blur ring-1 ring-white/10 shadow-2xl p-6">
+      <div class="text-center mb-6">
+        <div class="text-4xl font-black tracking-tight">♦ <span class="text-amber-400">Rummikub</span> ♣</div>
+        <div class="text-white/50 text-sm mt-1">Casino Edition · Dark Mode</div>
+      </div>
+
+      <div class="flex gap-2 mb-5">
+        <button id="tab-single"></button>
+        <button id="tab-local"></button>
+      </div>
+
+      <!-- Single player -->
+      <div id="single-opts" class="space-y-4">
+        <div>
+          <label class="text-sm text-white/60">Your name</label>
+          <input id="single-name" value="You" class="mt-1 w-full rounded-lg bg-white/5 px-3 py-2 outline-none ring-1 ring-white/10 focus:ring-amber-400" />
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="text-sm text-white/60">Difficulty</label>
+            <select id="single-diff" class="mt-1 w-full rounded-lg bg-white/5 px-3 py-2 outline-none ring-1 ring-white/10 focus:ring-amber-400">
+              <option value="easy">Easy</option>
+              <option value="medium" selected>Medium</option>
+              <option value="hard">Hard</option>
+              <option value="expert">Expert</option>
+            </select>
+          </div>
+          <div>
+            <label class="text-sm text-white/60">AI opponents</label>
+            <select id="single-ai" class="mt-1 w-full rounded-lg bg-white/5 px-3 py-2 outline-none ring-1 ring-white/10 focus:ring-amber-400">
+              <option value="1">1</option>
+              <option value="2">2</option>
+              <option value="3">3</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Local multiplayer -->
+      <div id="local-opts" class="space-y-4 hidden">
+        <div>
+          <label class="text-sm text-white/60">Players (pass &amp; play)</label>
+          <select id="local-count" class="mt-1 w-full rounded-lg bg-white/5 px-3 py-2 outline-none ring-1 ring-white/10 focus:ring-amber-400">
+            <option value="2">2</option>
+            <option value="3">3</option>
+            <option value="4">4</option>
+          </select>
+        </div>
+        <div id="local-names" class="space-y-2"></div>
+        <p class="text-xs text-white/40">Online play uses the same engine behind a networking layer — see the notes in the README.</p>
+      </div>
+
+      <label class="mt-5 flex items-center gap-3 text-sm text-white/70">
+        <input id="opt-timer" type="checkbox" class="h-4 w-4 accent-amber-400" />
+        60-second turn timer (tournament rule; off by default)
+      </label>
+
+      <button id="btn-start" class="mt-6 w-full rounded-xl bg-amber-400 py-3 font-bold text-slate-900 hover:bg-amber-300 transition">
+        Deal &amp; Play
+      </button>
+    </div>
+  </div>
+
+  <!-- ======================= GAME ======================= -->
+  <div id="game" class="hidden flex flex-col h-full">
+    <!-- HUD -->
+    <header class="flex flex-wrap items-center gap-2 px-3 py-2 bg-slate-900/80 ring-1 ring-white/10 z-20">
+      <div id="players-bar" class="flex flex-wrap gap-2 flex-1 min-w-0"></div>
+      <div id="meld-progress" class="hidden text-sm rounded-lg bg-white/5 px-3 py-1.5"></div>
+      <div id="timer-box" class="hidden text-sm rounded-lg bg-white/5 px-3 py-1.5">⏱ <span id="timer-text" class="font-bold"></span></div>
+      <div class="text-sm rounded-lg bg-white/5 px-3 py-1.5">🁢 Pile: <b id="deck-count">0</b></div>
+      <button id="btn-settings" class="rounded-lg bg-white/5 px-3 py-1.5 hover:bg-white/10">⚙</button>
+      <button id="btn-newgame" class="rounded-lg bg-white/5 px-3 py-1.5 hover:bg-white/10 text-sm">New</button>
+    </header>
+
+    <div id="status-text" class="px-4 py-1 text-sm text-amber-200/90 bg-slate-900/60 min-h-[1.75rem]"></div>
+
+    <!-- Board -->
+    <main id="board-viewport" class="relative flex-1 felt overflow-hidden" style="touch-action:none;">
+      <div id="board-world" class="absolute top-0 left-0"></div>
+
+      <div id="ai-overlay" class="hidden absolute inset-0 flex items-center justify-center bg-black/20 pointer-events-none">
+        <div class="rounded-2xl bg-slate-900/80 px-6 py-3 text-white/80 ring-1 ring-white/10">Opponent is thinking…</div>
+      </div>
+
+      <div class="absolute bottom-3 right-3 flex flex-col gap-2">
+        <button id="zoom-in" class="h-10 w-10 rounded-full bg-slate-900/80 ring-1 ring-white/10 text-xl hover:bg-slate-800">＋</button>
+        <button id="zoom-out" class="h-10 w-10 rounded-full bg-slate-900/80 ring-1 ring-white/10 text-xl hover:bg-slate-800">－</button>
+        <button id="zoom-reset" class="h-10 w-10 rounded-full bg-slate-900/80 ring-1 ring-white/10 text-sm hover:bg-slate-800">⤢</button>
+      </div>
+    </main>
+
+    <!-- Rack + actions -->
+    <footer class="bg-slate-900/90 ring-1 ring-white/10">
+      <div class="flex flex-wrap items-center gap-2 px-3 py-2">
+        <span id="rack-owner" class="font-semibold text-white/80 mr-auto"></span>
+        <button id="btn-sort-num"   class="rounded-lg bg-white/5 px-3 py-1.5 text-sm hover:bg-white/10">Sort 1‑13</button>
+        <button id="btn-sort-color" class="rounded-lg bg-white/5 px-3 py-1.5 text-sm hover:bg-white/10">Sort ▦</button>
+        <button id="btn-best"       class="rounded-lg bg-white/5 px-3 py-1.5 text-sm hover:bg-white/10">✨ Best move</button>
+        <button id="btn-draw"       class="rounded-lg bg-sky-500/80 px-3 py-1.5 text-sm font-semibold hover:bg-sky-400">Draw</button>
+        <button id="btn-reset"      class="rounded-lg bg-white/10 px-3 py-1.5 text-sm hover:bg-white/20">Reset turn</button>
+        <button id="btn-end"        class="rounded-lg bg-emerald-500 px-4 py-1.5 text-sm font-bold text-slate-900 hover:bg-emerald-400">End turn ✓</button>
+      </div>
+      <div id="rack" class="flex flex-nowrap gap-[3px] overflow-x-auto no-scrollbar px-3 pb-3 pt-1 min-h-[70px]"></div>
+    </footer>
+  </div>
+
+  <!-- ======================= MODALS ======================= -->
+  <div id="settings-modal" class="hidden fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4">
+    <div class="w-full max-w-xs rounded-2xl bg-slate-900 ring-1 ring-white/10 p-6 space-y-4">
+      <div class="text-lg font-bold">Settings</div>
+      <label class="flex items-center justify-between"><span>Background music</span>
+        <input id="opt-music" type="checkbox" checked class="h-5 w-5 accent-amber-400" /></label>
+      <label class="flex items-center justify-between"><span>Sound effects</span>
+        <input id="opt-sfx" type="checkbox" checked class="h-5 w-5 accent-amber-400" /></label>
+      <button id="settings-close" class="w-full rounded-xl bg-amber-400 py-2 font-bold text-slate-900">Close</button>
+    </div>
+  </div>
+
+  <div id="gameover-modal" class="hidden fixed inset-0 z-40 flex items-center justify-center bg-black/70 p-4">
+    <div class="w-full max-w-sm rounded-3xl bg-slate-900 ring-1 ring-white/10 p-6">
+      <div class="text-center text-2xl font-black mb-4">🏆 Final Ranking</div>
+      <div id="gameover-list" class="space-y-2"></div>
+      <button id="gameover-again" class="mt-6 w-full rounded-xl bg-amber-400 py-3 font-bold text-slate-900 hover:bg-amber-300">Play again</button>
+    </div>
+  </div>
+
+  <!-- Engine (load order matters; classic scripts so it runs from file://) -->
+  <script src="js/tiles.js"></script>
+  <script src="js/rules.js"></script>
+  <script src="js/solver.js"></script>
+  <script src="js/ai.js"></script>
+  <script src="js/game.js"></script>
+  <script src="js/audio.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>

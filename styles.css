@@ -1,0 +1,57 @@
+/* Minimal custom CSS — only what Tailwind can't express cleanly:
+   the casino felt, tile face gloss, joker face, and a couple of keyframes.
+   Everything else is Tailwind utilities. */
+
+:root { --tile-w: 46px; --tile-h: 64px; --tile-gap: 3px; }
+@media (max-width: 640px) { :root { --tile-w: 38px; --tile-h: 54px; } }
+
+html, body { height: 100%; overscroll-behavior: none; }
+body { font-family: ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif; -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; }
+
+/* Casino felt */
+.felt {
+  background:
+    radial-gradient(ellipse at 50% 0%, rgba(255,255,255,0.06), transparent 60%),
+    radial-gradient(ellipse at 50% 120%, rgba(0,0,0,0.55), transparent 70%),
+    repeating-linear-gradient(45deg, rgba(0,0,0,0.04) 0 2px, transparent 2px 4px),
+    #0f3d2e;
+  background-color: #103f30;
+}
+
+/* Tile */
+.tile {
+  width: var(--tile-w); height: var(--tile-h);
+  border-radius: 8px;
+  background: linear-gradient(180deg, #fdf6e3 0%, #f2e8cf 55%, #e7dcbb 100%);
+  box-shadow: 0 2px 3px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.9), inset 0 -3px 4px rgba(0,0,0,0.12);
+  position: relative; flex: 0 0 auto;
+  display: flex; align-items: center; justify-content: center;
+  transition: transform .12s ease, box-shadow .12s ease;
+  touch-action: none;
+}
+.tile:before { /* subtle top gloss */
+  content: ""; position: absolute; inset: 3px 3px auto 3px; height: 34%;
+  border-radius: 6px 6px 10px 10px; background: linear-gradient(180deg, rgba(255,255,255,0.55), rgba(255,255,255,0));
+  pointer-events: none;
+}
+.tile .num { font-weight: 800; font-size: calc(var(--tile-h) * 0.42); line-height: 1; z-index: 1; }
+.tile.dragging { opacity: .35; }
+.tile-ghost { position: fixed; z-index: 60; pointer-events: none; transform: translate(-50%,-50%) scale(1.06) rotate(-2deg); box-shadow: 0 12px 24px rgba(0,0,0,.5); }
+.tile.selected { outline: 3px solid #fbbf24; outline-offset: 1px; }
+
+/* Joker smiley face */
+.joker-face { width: 60%; height: 60%; }
+
+/* Meld container states */
+.meld { transition: box-shadow .15s ease, border-color .15s ease; }
+.meld.invalid { box-shadow: 0 0 0 2px rgba(239,68,68,.9), 0 6px 14px rgba(0,0,0,.4); }
+.meld.valid   { box-shadow: 0 0 0 2px rgba(16,185,129,.55), 0 6px 14px rgba(0,0,0,.4); }
+.meld.drop-target { box-shadow: 0 0 0 3px rgba(251,191,36,.95), 0 6px 18px rgba(0,0,0,.5); }
+
+@keyframes turnpulse { 0%,100% { box-shadow: 0 0 0 0 rgba(251,191,36,.6); } 50% { box-shadow: 0 0 0 6px rgba(251,191,36,0); } }
+.turn-active { animation: turnpulse 1.8s infinite; }
+@keyframes popin { from { transform: scale(.6); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+.pop { animation: popin .18s ease; }
+
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
