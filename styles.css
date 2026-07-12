@@ -62,6 +62,8 @@ body { font-family: ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif; -w
 .tile .num { font-weight: 800; font-size: calc(var(--tile-h) * 0.42); line-height: 1; z-index: 1; }
 .tile.dragging { opacity: .35; }
 .tile-ghost { position: fixed; z-index: 60; pointer-events: none; transform: translate(-50%,-50%) scale(1.06) rotate(-2deg); box-shadow: 0 12px 24px rgba(0,0,0,.5); }
+/* When snapped to a grid cell the preview sits flush (no tilt) exactly where the tile lands */
+.tile-ghost.snapped { transform: none; box-shadow: 0 0 0 2px rgba(251,191,36,.95), 0 12px 24px rgba(0,0,0,.55); }
 .tile.selected { outline: 3px solid #fbbf24; outline-offset: 1px; }
 
 /* Joker smiley face */

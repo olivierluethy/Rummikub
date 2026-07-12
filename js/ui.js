@@ -520,17 +520,38 @@ window.RK = window.RK || {};
     const g = $('board-grid'); if (g) g.classList.add('hidden');
     const c = $('grid-cell'); if (c) c.classList.add('hidden');
   }
-  // A meld pill insets its tiles by ~12px (padding + ring); offset cell cues so
-  // they sit exactly under where the tile face will land.
-  const PILL_PAD = 12;
-  // Highlight the single cell a tile would drop into (flush, tile-sized).
+  // Measured inset of a meld pill's first tile from the pill's { _x, _y } anchor
+  // (the pill renders with 0 horizontal padding — which keeps a meld within its
+  // grid columns — and py-2 = 8px on top). Every drag cue uses this one formula so
+  // the highlighted cell, the dragged preview, and the final dropped tile match.
+  const PAD_X = 0, PAD_Y = 8;
+  function cellTilePos(cell) { return { x: colToX(cell.col) + PAD_X, y: rowToY(cell.row) + PAD_Y }; }
+  // Highlight the exact tile-sized slot a tile will drop into.
   function highlightCell(cell) {
     const c = $('grid-cell'); if (!c) return;
+    const pos = cellTilePos(cell);
     c.classList.remove('hidden');
-    c.style.left = (colToX(cell.col) + PILL_PAD) + 'px';
-    c.style.top = (rowToY(cell.row) + 14) + 'px';
+    c.style.left = pos.x + 'px';
+    c.style.top = pos.y + 'px';
     c.style.width = cssVar('--tile-w') + 'px';
-    c.style.height = (cssVar('--tile-h') + 8) + 'px';
+    c.style.height = cssVar('--tile-h') + 'px';
+  }
+  // Snap the dragged preview onto that same cell (world->screen via the board's
+  // own transform) so what you drag is exactly what lands.
+  function snapGhostToCell(ghost, cell) {
+    const vp = $('board-viewport').getBoundingClientRect();
+    const pos = cellTilePos(cell);
+    ghost.style.left = (vp.left + UI.tx + pos.x * UI.scale) + 'px';
+    ghost.style.top = (vp.top + UI.ty + pos.y * UI.scale) + 'px';
+    ghost.style.width = (cssVar('--tile-w') * UI.scale) + 'px';
+    ghost.style.height = (cssVar('--tile-h') * UI.scale) + 'px';
+    ghost.style.transform = 'none';
+    ghost.classList.add('snapped');
+  }
+  function unsnapGhost(ghost, x, y) {
+    ghost.style.left = x + 'px'; ghost.style.top = y + 'px';
+    ghost.style.transform = ''; ghost.style.width = ''; ghost.style.height = '';
+    ghost.classList.remove('snapped');
   }
 
   // Drop onto open felt: snap to the grid. If the target cell sits flush against
@@ -672,8 +693,6 @@ window.RK = window.RK || {};
       g.el.classList.add('dragging');
       RK.audio.play('button');
     }
-    g.ghost.style.left = e.clientX + 'px';
-    g.ghost.style.top = e.clientY + 'px';
     // Highlight the drop target + show exactly where the tile will land.
     document.querySelectorAll('.drop-target').forEach(el => el.classList.remove('drop-target'));
     hideCaret();
@@ -681,6 +700,7 @@ window.RK = window.RK || {};
     const meld = under && under.closest('.meld[data-meld-index]');   // committed sets only
     const rack = under && under.closest('#rack');
     const inBoard = under && under.closest('#board-viewport');
+    let snapCell = null;
     if (rack) {
       hideGridOverlay();
       showRackCaret(rackInsertIndex(e.clientX, e.clientY, g.el), g.el);
@@ -692,11 +712,15 @@ window.RK = window.RK || {};
         const c = $('grid-cell'); if (c) c.classList.add('hidden');
       } else {                             // open felt: light up the snap cell
         const w = screenToWorld(e.clientX, e.clientY);
-        highlightCell(worldToCell(w.x, w.y));
+        snapCell = worldToCell(w.x, w.y);
+        highlightCell(snapCell);
       }
     } else {
       hideGridOverlay();
     }
+    // Over an open cell the preview snaps to it; everywhere else it follows the cursor.
+    if (snapCell) snapGhostToCell(g.ghost, snapCell);
+    else unsnapGhost(g.ghost, e.clientX, e.clientY);
   }
 
   function clearDropCues() {
