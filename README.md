@@ -42,7 +42,36 @@ and **Sort by colour**. In hotseat mode only the active player's rack is shown.
 
 **Drag & drop:** custom pointer-based engine (not HTML5 DnD) so mouse and touch
 behave identically. Live validation colours every set green/red as you build,
-with a golden drop-target highlight.
+with a golden drop-target highlight and a **live insertion caret** showing the
+exact slot a tile will land in (in the rack and in melds).
+
+### Learning mode & UX
+
+- **Physical rack tray** — a raised holder with a front ledge and slot grooves,
+  clearly separated from the felt; wraps to a second row.
+- **Scannable melds** — each set is a spaced pill with a `RUN · pts` / `GROUP · pts`
+  badge; sort buttons are labelled **Runs** / **Groups** with tooltips.
+- **Guided Best move** — instead of dumping the solution, it first tells you *how
+  many plays* are possible, then reveals them one at a time: the source tile(s)
+  ring cyan, a green ghost shows the destination, and a tile flies to it. Step
+  with **Next hint**, apply with **Place this**, or skip the lesson with
+  **Auto-solve**. In **easy mode** the source/destination/resulting-set colours
+  are called out with an on-screen legend.
+- **Tile selection** — tap to mark tiles; marked tiles float matching plays to the
+  front of the guided hint.
+- **Pre-placement** — while an opponent is thinking (single-player), drag tiles
+  onto the board to stage them as amber ghosts; they auto-play when your turn
+  starts. If an opponent's move invalidates a staged append, only those tiles
+  return to your rack.
+- **Move history & replay** — opponent placements animate onto the board; a
+  History modal lists every move and lets you step back/forward through a
+  read-only replay of the board at any point.
+
+**Assumptions made** (per "choose a sensible default and note it"): a "play" is
+one atomic placement (a new set, or one tile appended to a set); the guided hint
+decomposes the best move into individually-legal plays so each step is safe to
+apply. Pre-placement is single-player only — a hotseat opponent shares the screen,
+so staging tiles for them makes no sense.
 
 **AI:** see below.
 
