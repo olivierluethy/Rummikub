@@ -75,6 +75,10 @@ window.RK = window.RK || {};
   // Drop any now-empty melds (used after the UI removes the last tile from a meld).
   P.pruneEmptyMelds = function () { this.board = this.board.filter(m => m.length > 0); };
 
+  // Put every meld into canonical order (runs ascending, groups by colour). Called
+  // whenever the board changes so history snapshots and replays are always sorted.
+  P.normalizeBoard = function () { this.board.forEach(m => RK.sortMeldInPlace(m)); };
+
   // Every tile id currently accounted for across the draw pile, all racks and the
   // board. This must always equal the ledger captured at deal time.
   P.tileCensus = function () {
@@ -118,6 +122,7 @@ window.RK = window.RK || {};
   P.commitTurn = function () {
     const player = this.currentPlayer();
     this.pruneEmptyMelds();
+    this.normalizeBoard();
     const snap = this._snapshot;
 
     // Tile conservation: nothing invented or lost.
@@ -164,6 +169,7 @@ window.RK = window.RK || {};
     const move = RK.ai.decideMove(this, player);
     if (move.type === 'play') {
       this.board = move.newBoard;
+      this.normalizeBoard();
       const placed = new Set(move.placedIds);
       player.rack = player.rack.filter(t => !placed.has(t.id));
       if (move.didMeld) player.melded = true;

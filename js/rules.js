@@ -51,7 +51,10 @@ window.RK = window.RK || {};
     if (jokers > freeColors) return { valid: false, reason: 'No color left for a joker' };
 
     const points = number * tiles.length;
-    return { valid: true, type: 'group', points, reason: '' };
+    // Canonical order: naturals by the standard colour order, jokers last.
+    const order = naturals.slice().sort((a, b) => RK.COLORS.indexOf(a.color) - RK.COLORS.indexOf(b.color))
+      .concat(tiles.filter(t => t.isJoker));
+    return { valid: true, type: 'group', points, order, reason: '' };
   }
 
   // RUN: 3+ tiles, SAME color, CONSECUTIVE numbers. Jokers fill gaps/ends.
@@ -106,8 +109,43 @@ window.RK = window.RK || {};
     const end = startCandidate + totalLen - 1;
     let points = 0;
     for (let v = startCandidate; v <= end; v++) points += v;
-    return { valid: true, type: 'run', points, reason: '' };
+
+    // Canonical display order: ascending by number, each joker slotted into its
+    // logical position (start..end, naturals in place, jokers fill the gaps/ends).
+    const byNum = {};
+    naturals.forEach(t => { byNum[t.number] = t; });
+    const jokerTiles = tiles.filter(t => t.isJoker);
+    const order = [];
+    let jk = 0;
+    for (let v = startCandidate; v <= end; v++) order.push(byNum[v] || jokerTiles[jk++]);
+
+    return { valid: true, type: 'run', points, order, reason: '' };
   }
+
+  // ---- Canonical ordering ---------------------------------------------------
+  // Rearrange a meld's tiles into canonical display order *in place*, preserving
+  // the array's identity and any layout props (_row/_col/_pinned) hung on it.
+  // Invalid melds (e.g. mid-build) are left untouched so nothing jumps around
+  // until it's actually a legal set.
+  RK.sortMeldInPlace = function (meld) {
+    const r = RK.validateSet(meld);
+    if (r.valid && r.order && r.order.length === meld.length) {
+      meld.splice.apply(meld, [0, meld.length].concat(r.order));
+    }
+    return meld;
+  };
+
+  // The index at which `tile` belongs once added to `meld`, per canonical order
+  // (e.g. adding red 12 to 8-9-10-11 returns 4; a joker slots by its value).
+  // Falls back to the end if the result wouldn't be a legal set.
+  RK.sortedInsertIndex = function (meld, tile) {
+    const r = RK.validateSet(meld.concat([tile]));
+    if (r.valid && r.order) {
+      const idx = r.order.findIndex(t => t.id === tile.id);
+      if (idx >= 0) return idx;
+    }
+    return meld.length;
+  };
 
   // ---- Board / turn validation ---------------------------------------------
 

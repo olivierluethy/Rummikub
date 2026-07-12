@@ -65,6 +65,7 @@ window.RK = window.RK || {};
     if (UI.review.active) { renderReview(); applyTransform(); updateControls(); return; }
     $('board-viewport').classList.remove('board-review');
     $('review-bar').classList.add('hidden');
+    UI.game.normalizeBoard();       // every committed meld shown in canonical order
     layoutBoard(UI.game.board);
     renderBoard(UI.game.board);
     renderPending();
@@ -846,7 +847,7 @@ window.RK = window.RK || {};
       const melds = RK.findMelds(p.rack);
       const pts = RK.sumMeldPoints(melds).total;
       const ok = melds.length && pts >= RK.INITIAL_MELD_MIN;
-      return { plays: ok ? melds.map(m => ({ type: 'new', tiles: m })) : [], opening: true, openingPts: pts, openingOk: ok };
+      return { plays: ok ? melds.map(m => ({ type: 'new', tiles: RK.sortMeldInPlace(m) })) : [], opening: true, openingPts: pts, openingOk: ok };
     }
     const plays = [];
     let remaining = p.rack.slice();
@@ -858,7 +859,7 @@ window.RK = window.RK || {};
         }
       }
     });
-    RK.findMelds(remaining).forEach(m => plays.push({ type: 'new', tiles: m }));
+    RK.findMelds(remaining).forEach(m => plays.push({ type: 'new', tiles: RK.sortMeldInPlace(m) }));
     // Selected tiles express intent — float plays that use them to the front (Task 6).
     if (UI.selected.size) {
       const uses = (pl) => (pl.type === 'new' ? pl.tiles : [pl.tile]).some(t => UI.selected.has(t.id));
