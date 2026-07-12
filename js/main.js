@@ -99,12 +99,14 @@ window.RK = window.RK || {};
       resetTimer();
       if (RK.ui.endGuidedHint) RK.ui.endGuidedHint();
       if (p.isAI && game.phase === 'playing') {
+        // A calmer think time also gives the human a real window to pre-place
+        // tiles during opponents' turns (single-player convenience).
         setTimeout(() => {
           if (game.currentPlayer() === p && game.phase === 'playing') {
             RK.audio.play('shuffle');
             game.applyAIMove();
           }
-        }, 750);
+        }, 1400);
       }
     });
     game.on('finish', (p) => { RK.audio.play('victory'); });

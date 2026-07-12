@@ -116,8 +116,9 @@
       </div>
       <div id="board-world" class="absolute top-0 left-0"></div>
 
-      <div id="ai-overlay" class="hidden absolute inset-0 flex items-center justify-center bg-black/20 pointer-events-none">
-        <div class="rounded-2xl bg-slate-900/80 px-6 py-3 text-white/80 ring-1 ring-white/10">Opponent is thinking…</div>
+      <!-- Non-blocking opponent-turn banner (also invites pre-placing in single) -->
+      <div id="ai-overlay" class="hidden absolute top-3 left-1/2 -translate-x-1/2 z-10 pointer-events-none max-w-[92%]">
+        <div id="ai-overlay-text" class="rounded-2xl bg-slate-900/85 px-5 py-2.5 text-sm text-white/85 ring-1 ring-white/10 shadow-xl text-center"></div>
       </div>
 
       <div class="absolute bottom-3 right-3 flex flex-col gap-2">

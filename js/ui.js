@@ -113,7 +113,14 @@ window.RK = window.RK || {};
     } else {
       prog.classList.add('hidden');
     }
-    $('ai-overlay').classList.toggle('hidden', g.isHumanTurn() || g.phase === 'over');
+    const showOverlay = !g.isHumanTurn() && g.phase === 'playing';
+    $('ai-overlay').classList.toggle('hidden', !showOverlay);
+    if (showOverlay) {
+      $('ai-overlay-text').innerHTML = g.mode === 'single'
+        ? '⏳ ' + escapeHtml(g.currentPlayer().name) + ' is playing — ' +
+          '<span class="text-amber-300">drag tiles onto the board to pre-place</span>; they auto-play on your turn'
+        : '⏳ ' + escapeHtml(g.currentPlayer().name) + '’s turn — pass the device';
+    }
   }
 
   // Grid-based layout. Every meld resolves to a { _row, _col } anchor and its
